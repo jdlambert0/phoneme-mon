@@ -32,6 +32,8 @@ import { CymaticsCanvas }  from './components/game/CymaticsCanvas';
 import { BattleHUD }       from './components/game/BattleHUD';
 import { OracleDisplay }   from './components/ui/OracleDisplay';
 import { VoiceInputViz }   from './components/ui/VoiceInputViz';
+import { RPSOverlay }      from './components/ui/RPSOverlay';
+import { ListenCountdown } from './components/ui/ListenCountdown';
 
 const LISTEN_WINDOW_MS = 6000;
 
@@ -380,6 +382,8 @@ export default function App() {
             detectedPhoneme={activePhoneme}
             isListening={isListening}
           />
+          <RPSOverlay />
+          <ListenCountdown isListening={isListening} durationMs={LISTEN_WINDOW_MS} />
 
           {ctx.gameMode === 'passplay' && ctx.currentTurn === 1 && stateName === 'BATTLE_LOOP' && (
             <div

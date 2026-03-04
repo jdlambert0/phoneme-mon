@@ -108,7 +108,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
 
       {phase === 'mode_select' && (
         <div style={{ marginTop: 140, display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: 360 }}>
-        <div style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 5, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', marginBottom: 16 }}>
+        <div style={{ fontFamily: 'Rajdhani', fontSize: 10, letterSpacing: 5, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: 16 }}>
             Select Mode
           </div>
           {GAME_MODES.map(({ id, label, desc }) => (
@@ -135,7 +135,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
 
           {/* Gender selector */}
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 16, alignItems: 'center' }}>
-            <span style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>Oracle Voice</span>
+            <span style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Oracle Voice</span>
             <button
               data-testid="gender-toggle"
               onClick={toggleGender}
