@@ -1,7 +1,7 @@
 # Phoneme-Mon — PRD
 
 ## Problem Statement
-Build "Phoneme-Mon" — a 100% voice-controlled, 3D auditory battle PWA. Zero-UI auditory environment where players vocalize phonemes to play RPS-style combat, analyzed in real-time via AudioWorklet DSP. Diegetic everything — no menus, Oracle narrates via 3D spatial audio.
+Build "Phoneme-Mon" — a 100% voice-controlled, 3D auditory battle PWA. Zero-UI auditory environment where players vocalize phonemes to play RPS-style combat, analyzed in real-time via AudioWorklet DSP.
 
 ## Architecture
 
@@ -20,14 +20,14 @@ src/machines/         XState v5 game machine + Markov enemy AI
 src/hooks/            useAudioEngine, useOracleVoice, useBattleReplay, useWebRTC, useCalibrationProfiles
 src/utils/            AudioContextManager, AUIManager, dspMath, narrationStrings, speechUtils
 src/components/
-  screens/            BootScreen, DiegeticInstall, CalibrationScreen, EndGameScreen, OnlineMatchmaking
+  screens/            BootScreen, DiegeticInstall, CalibrationScreen, TutorialScreen, EndGameScreen, OnlineMatchmaking
   game/               CymaticsCanvas, BattleHUD
   ui/                 OracleDisplay, VoiceInputViz
 ```
 
 ## Game States (XState v5)
 ```
-INIT_BOOT → DIEGETIC_INSTALL → CALIBRATION → BATTLE_LOOP ↔ RESULT_DISPLAY → END_GAME
+INIT_BOOT → DIEGETIC_INSTALL → CALIBRATION → TUTORIAL (if tutorialMode) → BATTLE_LOOP ↔ RESULT_DISPLAY → END_GAME
                               → ONLINE_MATCHMAKING (for online mode)
 ```
 
@@ -40,42 +40,41 @@ Burst (plosive/RMS spike) > Flow (fricative/high centroid) > Tone (vowel/low fla
 
 ### Completed
 - [x] AudioWorklet DSP (MeydaProcessor.js) — RMS, ZCR, Centroid, Flatness, MFCC-13, NaN guards
-- [x] XState v5 game machine — all states + ONLINE_MATCHMAKING + REMOTE_MOVE
+- [x] XState v5 game machine — all states + TUTORIAL + ONLINE_MATCHMAKING
 - [x] Markov chain enemy AI with adaptive difficulty
-- [x] AudioContextManager singleton with iOS hacks (silent stream, gesture unlock), fully defensive
+- [x] AudioContextManager singleton with iOS hacks, fully defensive
 - [x] AUIManager — SpatialPannerNode HRTF, all try-catch
-- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient x M/F) + speech safety timeouts
-- [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron, RAF-based (no re-render)
-- [x] VoiceInputViz — RAF-based with direct ref reads (no React state updates per frame)
-- [x] Battle HUD (health, round, moves, glass dagger indicator)
-- [x] Boot screen, Diegetic Install, Calibration Screen, End Game screen
-- [x] Pass & Play multiplayer (same device)
-- [x] Online PvP — WebRTC DataChannel, WebSocket signaling
+- [x] 6 Oracle voice configs + speech safety timeouts
+- [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron, RAF-based
+- [x] VoiceInputViz — RAF-based with direct ref reads
+- [x] Battle HUD — Large segmented HP bars (14px, 10 segments), shake animation on damage, color transitions (green/yellow/red)
+- [x] **Tutorial Screen** — Interactive RPS triangle diagram, 3-step phoneme practice with sound prompts, "TRAINING COMPLETE" → "BEGIN BATTLE"
+- [x] **Longer battle turns** — 6s listen window, 5s result display
+- [x] Boot screen, Diegetic Install (4 modes: Tutorial/Solo/Pass&Play/Online), Calibration Screen, End Game screen
+- [x] Pass & Play multiplayer + Online PvP (WebRTC/WebSocket)
 - [x] Battle replay export + Web Share API
 - [x] Backend: score endpoints + room management + WebSocket relay
+- [x] All external API calls (Speech, WebAudio, WebRTC) wrapped in try-catch
 
 ### Bug Fixes (2026-03-04)
-- [x] **CRITICAL: CymaticsCanvas invalid hex-to-rgba** — `#FF2A6D` → `rgba(FF2A6D,0.15)` threw on every frame
-- [x] **CRITICAL: 43Hz re-render cascade** — Audio features triggered full React tree re-render at 43fps. Fixed by storing features in ref, throttling state updates to 12Hz, CymaticsCanvas+VoiceInputViz use featuresRef directly.
-- [x] **CRITICAL: Stale closures in battle effects** — `startListenWindow` captured stale XState context
-- [x] **Speech synthesis fallback** — Added 6s timeout + per-utterance safety timeout for devices where onend never fires
-- [x] **Defensive refactor** — All Speech Synthesis, Web Audio, WebRTC, AudioWorklet calls wrapped in try-catch. App is now crash-proof on any device.
+- [x] CymaticsCanvas invalid hex-to-rgba color conversion
+- [x] 43Hz re-render cascade (throttled to 12Hz)
+- [x] Stale closures in battle effects
+- [x] Speech synthesis fallback timeouts
 
 ### P0 Backlog (Next)
-- [ ] Tune MFCC Euclidean distance thresholds with real mic testing
-- [ ] Advanced Phoneme Tuning screen (record/fine-tune phoneme samples)
-- [ ] Profile selection UI in calibration (skip re-calibration)
+- [ ] Tune MFCC thresholds with real mic testing
+- [ ] Advanced Phoneme Tuning screen
+- [ ] Profile selection UI in calibration
 
 ### P1 Backlog
 - [ ] Enemy AI Variety (aggressive, defensive personalities)
-- [ ] Multiple battle arenas (different particle themes)
-- [ ] Score persistence with player names
+- [ ] Multiple battle arenas
 - [ ] Global leaderboards
 
 ### P2 Backlog
 - [ ] Customizable Cymatics Visualizer
 - [ ] Animated GIF replay export
-- [ ] iOS App Store PWA submission guide
 
 ## API Endpoints
 - `GET /api/` — health check
