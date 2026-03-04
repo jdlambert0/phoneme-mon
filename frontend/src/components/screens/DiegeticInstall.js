@@ -46,15 +46,34 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
     setPhase('rules');
     const narr = getNarration('rpsRules', 'mentor');
     setOracleText(narr);
-    oracle?.speak(narr, () => {
-      setTimeout(() => {
-        setPhase('oracle_select');
-        const sel = getNarration('calibrate_burst', 'mentor');
-        setOracleText('Speak now. A Burst will summon the Rival. A Flow will summon the Mentor. A Tone will summon the Ancient. Your first sound chooses your Oracle.');
-        oracle?.speak('Speak now. A Burst summons the Rival. A Flow summons the Mentor. A Tone summons the Ancient. Your first sound chooses your Oracle.');
-      }, 500);
-    });
+
+    const advanceToOracleSelect = () => {
+      setPhase('oracle_select');
+      setOracleText('Speak now. A Burst summons the Rival. A Flow summons the Mentor. A Tone summons the Ancient. Your first sound chooses your Oracle.');
+      oracle?.speak('Speak now. A Burst summons the Rival. A Flow summons the Mentor. A Tone summons the Ancient. Your first sound chooses your Oracle.');
+    };
+
+    oracle?.speak(narr, () => setTimeout(advanceToOracleSelect, 500));
+    // Fallback: auto-advance after 8s if speech synthesis never fires callback
+    setTimeout(() => {
+      setPhase((prev) => prev === 'rules' ? 'oracle_select' : prev);
+    }, 8000);
   }, [oracle]);
+
+  const selectPersonality = useCallback((personality) => {
+    if (phase !== 'oracle_select') return;
+    setDetectedPersonality(personality);
+    setPhase('confirming');
+    const confirmText = `The ${personality.toUpperCase()} has been summoned. Linking your voice to the system.`;
+    setOracleText(confirmText);
+    oracle?.speak(confirmText, () => {
+      setTimeout(() => {
+        onComplete({ personality, gender: detectedGender, gameMode: selectedMode });
+      }, 600);
+    });
+    // Fallback if speech never fires
+    setTimeout(() => onComplete({ personality, gender: detectedGender, gameMode: selectedMode }), 5000);
+  }, [phase, oracle, detectedGender, selectedMode, onComplete]);
 
   // Auto-detect phoneme during oracle_select phase
   useEffect(() => {
@@ -63,20 +82,9 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
     if (rms < 0.08) return;
     const personality = detectPersonalityFromVoice();
     if (!personality) return;
-
     clearTimeout(listenWindowRef.current);
-    listenWindowRef.current = setTimeout(() => {
-      setDetectedPersonality(personality);
-      setPhase('confirming');
-      const confirmText = `The ${personality.toUpperCase()} has been summoned. Linking your voice to the system.`;
-      setOracleText(confirmText);
-      oracle?.speak(confirmText, () => {
-        setTimeout(() => {
-          onComplete({ personality, gender: detectedGender, gameMode: selectedMode });
-        }, 600);
-      });
-    }, 400);
-  }, [latestFeatures, phase, detectPersonalityFromVoice, oracle, detectedGender, selectedMode, onComplete]);
+    listenWindowRef.current = setTimeout(() => selectPersonality(personality), 400);
+  }, [latestFeatures, phase, detectPersonalityFromVoice, selectPersonality]);
 
   // Gender toggle (accessible UI fallback)
   const toggleGender = () => setDetectedGender((g) => g === 'female' ? 'male' : 'female');
@@ -143,20 +151,36 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
       )}
 
       {phase === 'oracle_select' && (
-        <div style={{ marginTop: 180, textAlign: 'center' }}>
-          <div style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 5, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>
-            Speak to choose
+        <div style={{ marginTop: 160, textAlign: 'center' }}>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 5, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', marginBottom: 28 }}>
+            Speak or tap to choose your Oracle
           </div>
-          <div style={{ marginTop: 20, display: 'flex', gap: 24, justifyContent: 'center' }}>
-            {['burst','flow','tone'].map((p) => (
-              <div key={p} style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'Cinzel', fontSize: 10, color: PERSONALITY_COLORS[p === 'burst' ? 'rival' : p === 'flow' ? 'mentor' : 'ancient'] || '#fff', letterSpacing: 3 }}>
-                  {p.toUpperCase()}
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
+            {[
+              { phoneme: 'burst', personality: 'rival',   color: '#FF2A6D' },
+              { phoneme: 'flow',  personality: 'mentor',  color: '#05D9E8' },
+              { phoneme: 'tone',  personality: 'ancient', color: '#D1F7FF' },
+            ].map(({ phoneme, personality: p, color }) => (
+              <button
+                key={p}
+                data-testid={`oracle-select-${p}`}
+                onClick={() => selectPersonality(p)}
+                style={{
+                  fontFamily: 'Cinzel', fontSize: 11, letterSpacing: 3,
+                  color, background: 'transparent',
+                  border: `1px solid ${color}30`,
+                  padding: '16px 20px', textTransform: 'uppercase',
+                  cursor: 'pointer', textAlign: 'center', minWidth: 90,
+                  transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = color; e.currentTarget.style.boxShadow = `0 0 12px ${color}40`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = `${color}30`; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <div>{phoneme.toUpperCase()}</div>
+                <div style={{ fontFamily: 'Rajdhani', fontSize: 8, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>
+                  → {p.toUpperCase()}
                 </div>
-                <div style={{ fontFamily: 'Rajdhani', fontSize: 8, color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>
-                  {p === 'burst' ? '→ RIVAL' : p === 'flow' ? '→ MENTOR' : '→ ANCIENT'}
-                </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
