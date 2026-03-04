@@ -1,20 +1,27 @@
 /**
  * useAudioEngine - Bridge between AudioWorklet feature stream and React
- * Manages microphone permission, feature streaming, and calibration recording
+ * 
+ * CRITICAL: Features arrive at ~43Hz from the AudioWorklet.
+ * We store them in a ref and only update React state at ~12Hz
+ * to prevent a 43x/sec re-render cascade through the component tree.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { AudioContextManager } from '../utils/AudioContextManager';
 import { classifyPhoneme } from '../utils/dspMath';
 
-const FEATURE_BUFFER_FRAMES = 15; // ~450ms of features for classification
+const FEATURE_BUFFER_FRAMES = 15;
+const STATE_UPDATE_INTERVAL = 80; // ~12Hz throttle for React state
 
 export function useAudioEngine() {
-  const [micState, setMicState] = useState('idle'); // idle | requesting | active | denied
+  const [micState, setMicState] = useState('idle');
   const [latestFeatures, setLatestFeatures] = useState(null);
+
+  const featuresRef = useRef(null);
   const featureBufferRef = useRef([]);
-  const calibrationRef = useRef(null); // current player calibration data
+  const calibrationRef = useRef(null);
   const isRecordingRef = useRef(false);
-  const recordedSamplesRef = useRef([]); // MFCC samples during calibration recording
+  const recordedSamplesRef = useRef([]);
+  const throttleTimerRef = useRef(null);
 
   const initMic = useCallback(async () => {
     setMicState('requesting');
@@ -23,7 +30,7 @@ export function useAudioEngine() {
       setMicState('active');
       return true;
     } catch (e) {
-      console.error('Mic error:', e);
+      console.error('Mic init error:', e);
       setMicState('denied');
       return false;
     }
@@ -32,79 +39,84 @@ export function useAudioEngine() {
   useEffect(() => {
     const mgr = AudioContextManager.getInstance();
     const unsubscribe = mgr.onFeatures((features) => {
-      setLatestFeatures(features);
-      // Maintain rolling feature buffer
+      if (!features) return;
+
+      // Always update the ref (instant, no re-render)
+      featuresRef.current = features;
+
+      // Maintain rolling buffer
       featureBufferRef.current.push(features);
       if (featureBufferRef.current.length > FEATURE_BUFFER_FRAMES) {
         featureBufferRef.current.shift();
       }
-      // If calibration recording is active, collect MFCC samples
-      if (isRecordingRef.current && features.rms > 0.02) {
+
+      // Collect calibration samples
+      if (isRecordingRef.current && features.rms > 0.02 && features.mfcc) {
         recordedSamplesRef.current.push(features.mfcc);
       }
+
+      // Throttled state update for React components
+      if (!throttleTimerRef.current) {
+        throttleTimerRef.current = setTimeout(() => {
+          throttleTimerRef.current = null;
+          setLatestFeatures(featuresRef.current);
+        }, STATE_UPDATE_INTERVAL);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribe();
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
+      }
+    };
   }, []);
 
-  /** Start recording calibration samples for current phoneme */
   const startCalibrationRecording = useCallback(() => {
     recordedSamplesRef.current = [];
     isRecordingRef.current = true;
   }, []);
 
-  /** Stop recording and return collected MFCC samples */
   const stopCalibrationRecording = useCallback(() => {
     isRecordingRef.current = false;
     return [...recordedSamplesRef.current];
   }, []);
 
-  /** Set current player's calibration fingerprint for live classification */
   const setCalibration = useCallback((calibration) => {
     calibrationRef.current = calibration;
   }, []);
 
-  /**
-   * Classify current audio against calibration.
-   * Uses the feature buffer (last ~450ms) for robust detection.
-   */
   const detectMove = useCallback(() => {
     const buffer = featureBufferRef.current;
     if (buffer.length < 5 || !calibrationRef.current) return null;
 
-    // Use last N frames
     const recent = buffer.slice(-FEATURE_BUFFER_FRAMES);
+    const avgRms = recent.reduce((s, f) => s + (f.rms || 0), 0) / recent.length;
 
-    // Average features for stability
-    const avgRms = recent.reduce((s, f) => s + f.rms, 0) / recent.length;
-    const avgZcr = recent.reduce((s, f) => s + f.zcr, 0) / recent.length;
-    const avgCentroid = recent.reduce((s, f) => s + f.spectralCentroid, 0) / recent.length;
+    if (avgRms < 0.015 || isNaN(avgRms)) return null;
 
-    // Only classify if there's meaningful audio
-    if (avgRms < 0.015) return null;
+    const loudest = recent.reduce((best, f) => ((f.rms || 0) > (best.rms || 0) ? f : best), recent[0]);
+    if (!loudest?.mfcc) return null;
 
-    // Use mid-buffer frame with highest RMS for MFCC classification
-    const loudest = recent.reduce((best, f) => (f.rms > best.rms ? f : best), recent[0]);
     const result = classifyPhoneme(loudest, calibrationRef.current);
 
     return {
       ...result,
       avgRms,
-      avgZcr,
-      avgCentroid,
+      avgZcr: recent.reduce((s, f) => s + (f.zcr || 0), 0) / recent.length,
+      avgCentroid: recent.reduce((s, f) => s + (f.spectralCentroid || 0), 0) / recent.length,
     };
   }, []);
-
-  /** Get current feature snapshot */
-  const getFeatures = useCallback(() => featureBufferRef.current[featureBufferRef.current.length - 1] || null, []);
 
   return {
     micState,
     latestFeatures,
+    featuresRef,
     initMic,
     startCalibrationRecording,
     stopCalibrationRecording,
     setCalibration,
     detectMove,
-    getFeatures,
   };
 }

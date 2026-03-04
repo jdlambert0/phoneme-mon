@@ -135,36 +135,41 @@ class MeydaProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
-    const ch = inputs[0]?.[0];
-    if (!ch) return true;
+    try {
+      const ch = inputs[0]?.[0];
+      if (!ch || ch.length === 0) return true;
 
-    for (let i = 0; i < ch.length; i++) {
-      this.buffer[this.writeIndex] = ch[i];
-      this.writeIndex = (this.writeIndex + 1) % this.BUFFER_SIZE;
+      for (let i = 0; i < ch.length; i++) {
+        const v = ch[i];
+        this.buffer[this.writeIndex] = (v === v) ? v : 0; // NaN guard
+        this.writeIndex = (this.writeIndex + 1) % this.BUFFER_SIZE;
+      }
+      this.samplesWritten += ch.length;
+
+      if (this.samplesWritten < this.BUFFER_SIZE) return true;
+
+      // Get ordered buffer
+      const frame = new Float32Array(this.BUFFER_SIZE);
+      for (let i = 0; i < this.BUFFER_SIZE; i++) {
+        frame[i] = this.buffer[(this.writeIndex + i) % this.BUFFER_SIZE];
+      }
+
+      const rms = this._computeRMS(frame);
+      const zcr = this._computeZCR(frame);
+
+      // Apply Hann window before FFT
+      const windowed = new Float32Array(this.BUFFER_SIZE);
+      for (let i = 0; i < this.BUFFER_SIZE; i++) windowed[i] = frame[i] * this.hannWindow[i];
+
+      const mag = this._fft(windowed);
+      const spectralCentroid = this._computeSpectralCentroid(mag);
+      const spectralFlatness = this._computeSpectralFlatness(mag);
+      const mfcc = this._computeMFCC(mag);
+
+      this.port.postMessage({ rms, zcr, spectralCentroid, spectralFlatness, mfcc, timestamp: currentTime });
+    } catch (e) {
+      // Swallow errors — worklet must not die
     }
-    this.samplesWritten += ch.length;
-
-    if (this.samplesWritten < this.BUFFER_SIZE) return true;
-
-    // Get ordered buffer
-    const frame = new Float32Array(this.BUFFER_SIZE);
-    for (let i = 0; i < this.BUFFER_SIZE; i++) {
-      frame[i] = this.buffer[(this.writeIndex + i) % this.BUFFER_SIZE];
-    }
-
-    const rms = this._computeRMS(frame);
-    const zcr = this._computeZCR(frame);
-
-    // Apply Hann window before FFT
-    const windowed = new Float32Array(this.BUFFER_SIZE);
-    for (let i = 0; i < this.BUFFER_SIZE; i++) windowed[i] = frame[i] * this.hannWindow[i];
-
-    const mag = this._fft(windowed);
-    const spectralCentroid = this._computeSpectralCentroid(mag);
-    const spectralFlatness = this._computeSpectralFlatness(mag);
-    const mfcc = this._computeMFCC(mag);
-
-    this.port.postMessage({ rms, zcr, spectralCentroid, spectralFlatness, mfcc, timestamp: currentTime });
     return true;
   }
 }

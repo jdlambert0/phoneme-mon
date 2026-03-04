@@ -1,21 +1,26 @@
 /**
- * Phoneme-Mon — Main Application (v2)
- * Wires: XState · AudioEngine · AUI Spatial · Oracle Voice · WebRTC · Replay · Profiles
+ * Phoneme-Mon — Main Application (v3 — Defensive Refactor)
+ *
+ * Key changes from v2:
+ * - Audio features stored in ref, throttled to ~12Hz for React state
+ * - CymaticsCanvas & VoiceInputViz read featuresRef directly (no re-render per frame)
+ * - All external API calls (Speech, WebAudio, AUI) wrapped in try-catch
+ * - Effects use refs for fast-changing values; proper dependency arrays
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useMachine } from '@xstate/react';
 import './App.css';
 
-import { gameMachine } from './machines/gameMachine';
-import { AudioContextManager } from './utils/AudioContextManager';
-import { AUIManager }          from './utils/AUIManager';
-import { useAudioEngine }      from './hooks/useAudioEngine';
-import { useOracleVoice }      from './hooks/useOracleVoice';
-import { useBattleReplay }     from './hooks/useBattleReplay';
-import { useWebRTC }           from './hooks/useWebRTC';
+import { gameMachine }            from './machines/gameMachine';
+import { AudioContextManager }    from './utils/AudioContextManager';
+import { AUIManager }             from './utils/AUIManager';
+import { useAudioEngine }         from './hooks/useAudioEngine';
+import { useOracleVoice }         from './hooks/useOracleVoice';
+import { useBattleReplay }        from './hooks/useBattleReplay';
+import { useWebRTC }              from './hooks/useWebRTC';
 import { useCalibrationProfiles } from './hooks/useCalibrationProfiles';
-import { getNarration }        from './utils/narrationStrings';
-import { ensureVoicesLoaded }  from './utils/speechUtils';
+import { getNarration }           from './utils/narrationStrings';
+import { ensureVoicesLoaded }     from './utils/speechUtils';
 
 import BootScreen          from './components/screens/BootScreen';
 import DiegeticInstall     from './components/screens/DiegeticInstall';
@@ -39,25 +44,24 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [micError, setMicError]           = useState(false);
   const [rtcStatus, setRtcStatus]         = useState('idle');
-  // Online: wait for remote move after local move committed
   const awaitingRemoteRef = useRef(false);
 
-  const listenTimerRef  = useRef(null);
+  const listenTimerRef    = useRef(null);
   const detectIntervalRef = useRef(null);
-  const hasNarratedRef  = useRef({});
-  const auiRef          = useRef(null);
-  const startListenRef  = useRef(null);
+  const hasNarratedRef    = useRef({});
+  const auiRef            = useRef(null);
+  const startListenRef    = useRef(null);
 
+  // Hooks
   const audioEngine  = useAudioEngine();
   const oracle       = useOracleVoice(ctx.oraclePersonality, ctx.oracleGender);
   const replay       = useBattleReplay();
   const { profiles, saveProfile, touchProfile } = useCalibrationProfiles();
 
-  // ── WebRTC ────────────────────────────────────────────────────────────────
+  // ── WebRTC ──────────────────────────────────────────────────────────────
   const webrtc = useWebRTC({
     onConnectionChange: (s) => setRtcStatus(s),
     onRemoteMove: (move, artScore) => {
-      // Remote move received → dispatch to XState
       if (awaitingRemoteRef.current) {
         awaitingRemoteRef.current = false;
         send({ type: 'REMOTE_MOVE', move, articulationScore: artScore });
@@ -66,43 +70,44 @@ export default function App() {
     onOpponentReady: () => {},
   });
 
-  // ── AUI (Spatial Audio) init ──────────────────────────────────────────────
+  // ── AUI init (try once when context available) ──────────────────────────
   useEffect(() => {
-    const mgr = AudioContextManager.getInstance();
-    if (mgr.ctx && !auiRef.current) {
-      auiRef.current = new AUIManager(mgr.ctx);
-    }
+    try {
+      const mgr = AudioContextManager.getInstance();
+      if (mgr.ctx && !auiRef.current) {
+        auiRef.current = new AUIManager(mgr.ctx);
+      }
+    } catch {}
   }, [stateName]);
 
-  // ── ORACLE SPEAK + AUI spatial tone ───────────────────────────────────────
+  // ── Oracle speak (defensive wrapper) ────────────────────────────────────
   const oracleSay = useCallback((text, onEnd) => {
-    setOracleText(text);
-    auiRef.current?.playEvent('oracle_speak');
+    try { setOracleText(text); } catch {}
+    try { auiRef.current?.playEvent('oracle_speak'); } catch {}
     oracle.speak(text, () => {
-      setTimeout(() => setOracleText(''), 1800);
+      try { setTimeout(() => setOracleText(''), 1800); } catch {}
       onEnd?.();
     });
   }, [oracle]);
 
   const oracleNarrate = useCallback((eventKey, onEnd) => {
-    oracleSay(getNarration(eventKey, ctx.oraclePersonality), onEnd);
+    const text = getNarration(eventKey, ctx.oraclePersonality);
+    oracleSay(text, onEnd);
   }, [ctx.oraclePersonality, oracleSay]);
 
-  // ── BOOT ──────────────────────────────────────────────────────────────────
+  // ── Boot touch handler ──────────────────────────────────────────────────
   const handleTouch = useCallback(async () => {
     try {
       const audioCtx = await AudioContextManager.getInstance().unlock();
       auiRef.current = new AUIManager(audioCtx);
       await ensureVoicesLoaded();
-      send({ type: 'TOUCH' });
     } catch (e) {
-      console.error('AudioContext unlock failed', e);
-      // Still advance — graceful degradation
-      send({ type: 'TOUCH' });
+      console.warn('Boot init error:', e);
     }
+    send({ type: 'TOUCH' });
   }, [send]);
 
-  // ── ORACLE SELECTED ───────────────────────────────────────────────────────
+  // ── Oracle selected ─────────────────────────────────────────────────────
   const handleOracleSelected = useCallback(async ({ personality, gender, gameMode }) => {
     send({ type: 'SET_ORACLE', personality, gender, gameMode });
     if (gameMode !== 'online') {
@@ -111,9 +116,9 @@ export default function App() {
     }
   }, [send, audioEngine]);
 
-  // ── ONLINE ROOM READY ─────────────────────────────────────────────────────
+  // ── Online room ─────────────────────────────────────────────────────────
   const handleRoomReady = useCallback(async ({ roomCode, role }) => {
-    await webrtc.connect(roomCode, role);
+    try { await webrtc.connect(roomCode, role); } catch {}
     const ok = await audioEngine.initMic();
     if (!ok) setMicError(true);
   }, [webrtc, audioEngine]);
@@ -122,91 +127,99 @@ export default function App() {
     send({ type: 'ROOM_CONNECTED', roomCode, role });
   }, [send]);
 
-  // ── CALIBRATION ───────────────────────────────────────────────────────────
+  // ── Calibration ─────────────────────────────────────────────────────────
   const handleAddSample    = useCallback((mfcc) => send({ type: 'ADD_CALIBRATION_SAMPLE', mfcc }), [send]);
   const handleNextCalibPhase = useCallback(() => send({ type: 'NEXT_CALIBRATION_PHASE' }), [send]);
 
-  // ── BATTLE LOOP: listen window ────────────────────────────────────────────
+  // ── Battle listen window ────────────────────────────────────────────────
   const startListenWindow = useCallback(() => {
     setIsListening(true);
     setActivePhoneme(null);
 
-    const playerIdx  = ctx.gameMode === 'online' ? 0 : ctx.currentTurn;
-    const calibration = ctx.players[playerIdx]?.calibration;
-    if (calibration) audioEngine.setCalibration(calibration);
+    try {
+      const playerIdx  = ctx.gameMode === 'online' ? 0 : (ctx.currentTurn || 0);
+      const calibration = ctx.players?.[playerIdx]?.calibration;
+      if (calibration) audioEngine.setCalibration(calibration);
+    } catch {}
 
-    oracleNarrate('your_turn');
-    auiRef.current?.playEvent('oracle_speak');
+    try { oracleNarrate('your_turn'); } catch {}
+    try { auiRef.current?.playEvent('oracle_speak'); } catch {}
 
     detectIntervalRef.current = setInterval(() => {
-      const result = audioEngine.detectMove();
-      if (result?.phoneme) setActivePhoneme(result.phoneme);
+      try {
+        const result = audioEngine.detectMove();
+        if (result?.phoneme) setActivePhoneme(result.phoneme);
+      } catch {}
     }, 80);
 
     clearTimeout(listenTimerRef.current);
     listenTimerRef.current = setTimeout(() => {
       clearInterval(detectIntervalRef.current);
       setIsListening(false);
-      const finalResult = audioEngine.detectMove();
-      const move     = finalResult?.phoneme || null;
-      const artScore = finalResult?.articulationScore ?? 0.5;
 
-      if (ctx.gameMode === 'online') {
-        // Send move to opponent via DataChannel regardless
-        webrtc.sendMove(move || 'burst', artScore);
-        // Store locally and wait for remote
-        awaitingRemoteRef.current = true;
-        send({ type: 'COMMIT_MOVE', move: move || 'burst', articulationScore: artScore });
-        // Timeout: if no remote move after 8s, force resolve
-        setTimeout(() => {
-          if (awaitingRemoteRef.current) {
-            awaitingRemoteRef.current = false;
-            send({ type: 'TIMEOUT_MOVE' });
-          }
-        }, 8000);
-      } else if (!move) {
+      try {
+        const finalResult = audioEngine.detectMove();
+        const move     = finalResult?.phoneme || null;
+        const artScore = finalResult?.articulationScore ?? 0.5;
+
+        if (ctx.gameMode === 'online') {
+          webrtc.sendMove(move || 'burst', artScore);
+          awaitingRemoteRef.current = true;
+          send({ type: 'COMMIT_MOVE', move: move || 'burst', articulationScore: artScore });
+          setTimeout(() => {
+            if (awaitingRemoteRef.current) {
+              awaitingRemoteRef.current = false;
+              send({ type: 'TIMEOUT_MOVE' });
+            }
+          }, 8000);
+        } else if (!move) {
+          send({ type: 'TIMEOUT_MOVE' });
+        } else {
+          setActivePhoneme(move);
+          send({ type: 'COMMIT_MOVE', move, articulationScore: artScore });
+        }
+      } catch (e) {
+        console.warn('Listen window resolve error:', e);
         send({ type: 'TIMEOUT_MOVE' });
-      } else {
-        setActivePhoneme(move);
-        send({ type: 'COMMIT_MOVE', move, articulationScore: artScore });
       }
     }, LISTEN_WINDOW_MS);
   }, [ctx, audioEngine, oracleNarrate, send, webrtc]);
 
-  // Keep startListenWindow ref current to avoid stale closures in effects
+  // Keep ref current for effects
   useEffect(() => { startListenRef.current = startListenWindow; }, [startListenWindow]);
 
-  // ── STATE EFFECTS ─────────────────────────────────────────────────────────
+  // ── STATE EFFECTS ───────────────────────────────────────────────────────
+  // Battle start
   useEffect(() => {
     if (stateName !== 'BATTLE_LOOP') return;
     if (hasNarratedRef.current['battle_start']) return;
     hasNarratedRef.current['battle_start'] = true;
-    replay.startRecording();
-    auiRef.current?.playEvent('enemy_reveal');
+
+    try { replay.startRecording(); } catch {}
+    try { auiRef.current?.playEvent('enemy_reveal'); } catch {}
+
     const intro = getNarration('install', ctx.oraclePersonality);
     let started = false;
     const startOnce = () => {
       if (started) return;
       started = true;
-      setTimeout(() => startListenRef.current?.(), 800);
+      setTimeout(() => { try { startListenRef.current?.(); } catch {} }, 800);
     };
     oracleSay(intro, startOnce);
-    // Fallback: if speech callback never fires, start listen after 6s
-    setTimeout(startOnce, 6000);
+    setTimeout(startOnce, 6000); // fallback
   }, [stateName, ctx.oraclePersonality, oracleSay, replay]);
 
-  // New round: resume listen
+  // New round
   useEffect(() => {
     if (stateName !== 'BATTLE_LOOP') return;
-    if (!ctx.pendingMoves[0] && !ctx.pendingMoves[1] && ctx.round > 0) {
-      const key = `round-${ctx.round}`;
-      if (hasNarratedRef.current[key]) return;
-      hasNarratedRef.current[key] = true;
-      setTimeout(() => startListenRef.current?.(), 600);
-    }
+    if (ctx.pendingMoves?.[0] || ctx.pendingMoves?.[1] || ctx.round < 1) return;
+    const key = `round-${ctx.round}`;
+    if (hasNarratedRef.current[key]) return;
+    hasNarratedRef.current[key] = true;
+    setTimeout(() => { try { startListenRef.current?.(); } catch {} }, 600);
   }, [ctx.pendingMoves, ctx.round, stateName]);
 
-  // Round result narration + AUI
+  // Result display
   useEffect(() => {
     if (stateName !== 'RESULT_DISPLAY') return;
     const key = `result-${ctx.round}`;
@@ -215,33 +228,36 @@ export default function App() {
     clearInterval(detectIntervalRef.current);
     setIsListening(false);
 
-    // Record move for replay
-    replay.recordMove(0, ctx.pendingMoves[0], ctx.articulationScores[0], ctx.roundWinner);
+    try { replay.recordMove(0, ctx.pendingMoves?.[0], ctx.articulationScores?.[0], ctx.roundWinner); } catch {}
 
-    // AUI spatial sounds
-    if (ctx.roundWinner === 'p1')     auiRef.current?.playEvent('oracle_round_win');
-    else if (ctx.roundWinner === 'p2') auiRef.current?.playEvent('enemy_wins_round');
-    else                              auiRef.current?.playEvent('round_tie');
+    try {
+      if (ctx.roundWinner === 'p1')      auiRef.current?.playEvent('oracle_round_win');
+      else if (ctx.roundWinner === 'p2') auiRef.current?.playEvent('enemy_wins_round');
+      else                               auiRef.current?.playEvent('round_tie');
+    } catch {}
 
-    if (ctx.glassDaggerActive?.[0]) {
-      auiRef.current?.playEvent('glass_dagger');
-      oracleSay(getNarration('glass_dagger', ctx.oraclePersonality));
-    } else {
-      const narKey = ctx.roundWinner === 'p1' ? 'win_round'
-        : ctx.roundWinner === 'p2' ? 'lose_round' : 'tie_round';
-      oracleSay(getNarration(narKey, ctx.oraclePersonality));
-    }
+    try {
+      if (ctx.glassDaggerActive?.[0]) {
+        auiRef.current?.playEvent('glass_dagger');
+        oracleSay(getNarration('glass_dagger', ctx.oraclePersonality));
+      } else {
+        const narKey = ctx.roundWinner === 'p1' ? 'win_round'
+          : ctx.roundWinner === 'p2' ? 'lose_round' : 'tie_round';
+        oracleSay(getNarration(narKey, ctx.oraclePersonality));
+      }
+    } catch {}
   }, [stateName, ctx.round, ctx.pendingMoves, ctx.articulationScores, ctx.roundWinner, ctx.glassDaggerActive, ctx.oraclePersonality, oracleSay, replay]);
 
   // End game
   useEffect(() => {
     if (stateName !== 'END_GAME') return;
-    replay.stopRecording();
-    auiRef.current?.playEvent('calibration_complete');
+    try { replay.stopRecording(); } catch {}
+    try { auiRef.current?.playEvent('calibration_complete'); } catch {}
+
     const narKey = ctx.winner === 'p1' ? 'win_game' : 'lose_game';
     oracleSay(getNarration(narKey, ctx.oraclePersonality));
-    // Save score
-    if (ctx.players[0]?.title) {
+
+    if (ctx.players?.[0]?.title) {
       const BACKEND = process.env.REACT_APP_BACKEND_URL || '';
       fetch(`${BACKEND}/api/scores`, {
         method: 'POST',
@@ -249,17 +265,17 @@ export default function App() {
         body: JSON.stringify({
           player_title: ctx.players[0].title,
           personality:  ctx.oraclePersonality,
-          rounds_won:   ctx.finalScore[0],
-          rounds_lost:  ctx.finalScore[1],
+          rounds_won:   ctx.finalScore?.[0],
+          rounds_lost:  ctx.finalScore?.[1],
         }),
       }).catch(() => {});
     }
   }, [stateName, ctx.winner, ctx.oraclePersonality, ctx.players, ctx.finalScore, oracleSay, replay]);
 
-  // Stream features to replay recorder
+  // Feature stream to replay
   useEffect(() => {
     if (!audioEngine.latestFeatures) return;
-    replay.recordFrame(audioEngine.latestFeatures);
+    try { replay.recordFrame(audioEngine.latestFeatures); } catch {}
   }, [audioEngine.latestFeatures, replay]);
 
   // Cleanup
@@ -270,20 +286,20 @@ export default function App() {
 
   const handleReplay = useCallback(() => {
     hasNarratedRef.current = {};
-    oracle.cancel();
-    webrtc.disconnect();
+    try { oracle.cancel(); } catch {}
+    try { webrtc.disconnect(); } catch {}
     send({ type: 'REPLAY' });
   }, [send, oracle, webrtc]);
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
-  const showCanvas = !['INIT_BOOT'].includes(stateName);
+  // ── RENDER ──────────────────────────────────────────────────────────────
+  const showCanvas = stateName !== 'INIT_BOOT';
 
   return (
     <div className="App" data-testid="phonemon-app">
 
       {showCanvas && (
         <CymaticsCanvas
-          features={audioEngine.latestFeatures}
+          featuresRef={audioEngine.featuresRef}
           activePhoneme={activePhoneme}
           gameState={stateName}
         />
@@ -296,6 +312,7 @@ export default function App() {
           oracle={oracle}
           onComplete={handleOracleSelected}
           latestFeatures={audioEngine.latestFeatures}
+          featuresRef={audioEngine.featuresRef}
         />
       )}
 
@@ -303,14 +320,12 @@ export default function App() {
         <OnlineMatchmaking
           onRoomReady={(info) => {
             handleRoomReady(info).then(() => {
-              // Move to calibration once WebRTC peer-connected (or after timeout)
               const checkConnected = setInterval(() => {
                 if (rtcStatus === 'connected') {
                   clearInterval(checkConnected);
                   handleRoomConnected(info);
                 }
               }, 500);
-              // Fallback after 30s even if guest hasn't joined
               setTimeout(() => { clearInterval(checkConnected); handleRoomConnected(info); }, 30000);
             });
           }}
@@ -324,6 +339,7 @@ export default function App() {
           calibrationStep={ctx.calibrationStep}
           gameMode={ctx.gameMode}
           latestFeatures={audioEngine.latestFeatures}
+          featuresRef={audioEngine.featuresRef}
           savedProfiles={profiles}
           onAddSample={handleAddSample}
           onNextPhase={handleNextCalibPhase}
@@ -350,9 +366,12 @@ export default function App() {
             players={ctx.players}
           />
           <OracleDisplay text={oracleText} personality={ctx.oraclePersonality} isActive={!!oracleText} />
-          <VoiceInputViz features={audioEngine.latestFeatures} detectedPhoneme={activePhoneme} isListening={isListening} />
+          <VoiceInputViz
+            featuresRef={audioEngine.featuresRef}
+            detectedPhoneme={activePhoneme}
+            isListening={isListening}
+          />
 
-          {/* PassPlay: pass device overlay */}
           {ctx.gameMode === 'passplay' && ctx.currentTurn === 1 && stateName === 'BATTLE_LOOP' && (
             <div
               data-testid="pass-device-overlay"
@@ -371,7 +390,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Online: waiting for remote move */}
           {ctx.gameMode === 'online' && awaitingRemoteRef.current && (
             <div style={{
               position: 'fixed', bottom: 140, left: '50%', transform: 'translateX(-50%)',
@@ -393,7 +411,9 @@ export default function App() {
             finalScore={ctx.finalScore}
             gameMode={ctx.gameMode}
             onReplay={handleReplay}
-            onShare={() => replay.shareReplay(ctx.players[0]?.title || 'Voice')}
+            onShare={() => {
+              try { replay.shareReplay(ctx.players?.[0]?.title || 'Voice'); } catch {}
+            }}
             personality={ctx.oraclePersonality}
           />
           <OracleDisplay text={oracleText} personality={ctx.oraclePersonality} isActive={!!oracleText} />
@@ -415,7 +435,6 @@ export default function App() {
         </div>
       )}
 
-      {/* CRT noise overlay */}
       <div style={{
         position: 'fixed', inset: 0, zIndex: 90, pointerEvents: 'none',
         backgroundImage: 'url(https://grainy-gradients.vercel.app/noise.svg)',

@@ -111,9 +111,9 @@ export function useWebRTC({ onRemoteMove, onConnectionChange, onOpponentReady })
   }, []);
 
   const disconnect = useCallback(() => {
-    dcRef.current?.close();
-    pcRef.current?.close();
-    wsRef.current?.close();
+    try { dcRef.current?.close(); } catch {}
+    try { pcRef.current?.close(); } catch {}
+    try { wsRef.current?.close(); } catch {}
     dcRef.current = null; pcRef.current = null; wsRef.current = null;
     updateStatus('idle');
   }, [updateStatus]);

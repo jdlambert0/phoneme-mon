@@ -1,60 +1,50 @@
 /**
- * useOracleVoice - Oracle speech synthesis hook
- * Manages voice queue and personality
+ * useOracleVoice — Wraps speech synthesis for oracle personality.
+ * All calls are defensive — never throws.
  */
-import { useRef, useCallback, useEffect } from 'react';
-import { oracleSpeak, cancelSpeech, ensureVoicesLoaded, keepSpeechAlive } from '../utils/speechUtils';
-import { getNarration } from '../utils/narrationStrings';
+import { useCallback, useEffect, useRef } from 'react';
+import { oracleSpeak, cancelSpeech, keepSpeechAlive } from '../utils/speechUtils';
 
 export function useOracleVoice(personality = 'mentor', gender = 'female') {
+
   const queueRef = useRef([]);
-  const isPlayingRef = useRef(false);
-  const aliveIntervalRef = useRef(null);
+  const speakingRef = useRef(false);
 
-  useEffect(() => {
-    ensureVoicesLoaded();
-    // iOS fix: keep speech alive every 10s
-    aliveIntervalRef.current = setInterval(keepSpeechAlive, 10000);
-    return () => {
-      clearInterval(aliveIntervalRef.current);
-      cancelSpeech();
-    };
-  }, []);
-
-  const playNext = useCallback(() => {
-    if (queueRef.current.length === 0) { isPlayingRef.current = false; return; }
-    isPlayingRef.current = true;
+  const processQueue = useCallback(() => {
+    if (speakingRef.current || queueRef.current.length === 0) return;
+    speakingRef.current = true;
     const { text, onEnd } = queueRef.current.shift();
     oracleSpeak(text, personality, gender, () => {
+      speakingRef.current = false;
       onEnd?.();
-      playNext();
+      processQueue();
     });
   }, [personality, gender]);
 
-  /** Speak a text string immediately (clears queue) */
   const speak = useCallback((text, onEnd) => {
-    cancelSpeech();
-    queueRef.current = [{ text, onEnd }];
-    isPlayingRef.current = false;
-    playNext();
-  }, [playNext]);
+    if (!text) { onEnd?.(); return; }
+    oracleSpeak(text, personality, gender, onEnd);
+  }, [personality, gender]);
 
-  /** Queue a narration event by key */
-  const narrate = useCallback((eventKey, onEnd) => {
-    const text = getNarration(eventKey, personality);
+  const narrate = useCallback((text, onEnd) => {
     speak(text, onEnd);
-  }, [personality, speak]);
+  }, [speak]);
 
-  /** Add to queue without clearing */
   const enqueue = useCallback((text, onEnd) => {
     queueRef.current.push({ text, onEnd });
-    if (!isPlayingRef.current) playNext();
-  }, [playNext]);
+    processQueue();
+  }, [processQueue]);
 
   const cancel = useCallback(() => {
     queueRef.current = [];
-    isPlayingRef.current = false;
+    speakingRef.current = false;
     cancelSpeech();
+  }, []);
+
+  // iOS keep-alive: periodically poke speech synthesis
+  useEffect(() => {
+    const interval = setInterval(keepSpeechAlive, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   return { speak, narrate, enqueue, cancel };

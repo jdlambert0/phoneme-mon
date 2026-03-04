@@ -13,7 +13,7 @@ const GAME_MODES = [
  * DiegeticInstall: Oracle speaks rules, player chooses mode + personality via phoneme
  * Oracle personality is chosen by first phoneme detected (Burst=Rival, Flow=Mentor, Tone=Ancient)
  */
-export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) {
+export default function DiegeticInstall({ oracle, onComplete, latestFeatures, featuresRef }) {
   const [phase, setPhase] = useState('mode_select'); // mode_select | rules | oracle_select | confirming
   const [selectedMode, setSelectedMode] = useState('solo');
   const [detectedPersonality, setDetectedPersonality] = useState(null);
@@ -198,7 +198,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
         </div>
       )}
 
-      <VoiceInputViz features={latestFeatures} isListening={phase === 'oracle_select'} />
+      <VoiceInputViz featuresRef={featuresRef} isListening={phase === 'oracle_select'} />
     </div>
   );
 }

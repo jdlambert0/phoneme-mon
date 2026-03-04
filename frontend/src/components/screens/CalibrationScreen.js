@@ -17,6 +17,7 @@ export default function CalibrationScreen({
   calibrationStep = 0,
   gameMode = 'solo',
   latestFeatures,
+  featuresRef,
   onAddSample,
   onNextPhase,
   oracle,
@@ -171,7 +172,7 @@ export default function CalibrationScreen({
       )}
 
       {/* Voice viz */}
-      <VoiceInputViz features={latestFeatures} isListening={phase === 'recording'} />
+      <VoiceInputViz featuresRef={featuresRef} isListening={phase === 'recording'} />
     </div>
   );
 }
