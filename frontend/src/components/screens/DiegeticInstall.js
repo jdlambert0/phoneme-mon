@@ -4,6 +4,7 @@ import { VoiceInputViz } from '../ui/VoiceInputViz';
 import { OracleDisplay } from '../ui/OracleDisplay';
 
 const GAME_MODES = [
+  { id: 'tutorial', label: 'TUTORIAL',    desc: 'Learn the three voice attacks' },
   { id: 'solo',     label: 'SOLO',        desc: 'One voice vs the Oracle enemy' },
   { id: 'passplay', label: 'PASS & PLAY', desc: 'Two voices, one device' },
   { id: 'online',   label: 'ONLINE DUEL', desc: 'Challenge a remote opponent' },

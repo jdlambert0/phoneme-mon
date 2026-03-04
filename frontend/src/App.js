@@ -25,6 +25,7 @@ import { ensureVoicesLoaded }     from './utils/speechUtils';
 import BootScreen          from './components/screens/BootScreen';
 import DiegeticInstall     from './components/screens/DiegeticInstall';
 import CalibrationScreen   from './components/screens/CalibrationScreen';
+import TutorialScreen      from './components/screens/TutorialScreen';
 import EndGameScreen       from './components/screens/EndGameScreen';
 import OnlineMatchmaking   from './components/screens/OnlineMatchmaking';
 import { CymaticsCanvas }  from './components/game/CymaticsCanvas';
@@ -32,7 +33,7 @@ import { BattleHUD }       from './components/game/BattleHUD';
 import { OracleDisplay }   from './components/ui/OracleDisplay';
 import { VoiceInputViz }   from './components/ui/VoiceInputViz';
 
-const LISTEN_WINDOW_MS = 3500;
+const LISTEN_WINDOW_MS = 6000;
 
 export default function App() {
   const [state, send]    = useMachine(gameMachine);
@@ -348,6 +349,14 @@ export default function App() {
             stopCalibrationRecording:  audioEngine.stopCalibrationRecording,
             speak: (t, cb) => oracleSay(t, cb),
           }}
+        />
+      )}
+
+      {stateName === 'TUTORIAL' && (
+        <TutorialScreen
+          featuresRef={audioEngine.featuresRef}
+          onComplete={() => send({ type: 'START_BATTLE' })}
+          onSkip={() => send({ type: 'SKIP_TUTORIAL' })}
         />
       )}
 

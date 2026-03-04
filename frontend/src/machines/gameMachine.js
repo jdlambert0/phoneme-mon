@@ -10,6 +10,7 @@ export const INITIAL_CONTEXT = {
   oraclePersonality: 'mentor',
   oracleGender: 'female',
   gameMode: 'solo', // 'solo' | 'passplay' | 'online'
+  tutorialMode: false,
 
   // Online
   roomCode: null,
@@ -81,7 +82,8 @@ export const gameMachine = createMachine({
             actions: assign({
               oraclePersonality: ({ event }) => event.personality,
               oracleGender:      ({ event }) => event.gender,
-              gameMode:          ({ event }) => event.gameMode || 'solo',
+              gameMode:          ({ event }) => event.gameMode === 'tutorial' ? 'solo' : (event.gameMode || 'solo'),
+              tutorialMode:      ({ event }) => event.gameMode === 'tutorial',
               calibrationStep:   () => 0,
               calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
               players: () => [],
@@ -128,9 +130,33 @@ export const gameMachine = createMachine({
             guard: ({ context }) => context.calibrationStep < 2,
             actions: assign({ calibrationStep: ({ context }) => context.calibrationStep + 1 }),
           },
-          // Solo mode: P1 done, start battle
+          // Solo mode with tutorial: go to TUTORIAL first
           {
-            guard: ({ context }) => context.calibrationStep === 2 && context.gameMode === 'solo',
+            guard: ({ context }) => context.calibrationStep === 2 && context.gameMode === 'solo' && context.tutorialMode,
+            target: 'TUTORIAL',
+            actions: assign(({ context }) => {
+              const cs = context.calibrationSamples.p1;
+              const calibration = {
+                burst: averageMFCC(cs.burst),
+                flow: averageMFCC(cs.flow),
+                tone: averageMFCC(cs.tone),
+              };
+              const dominant = getDominantPhoneme({ burst: cs.burst, flow: cs.flow, tone: cs.tone });
+              const title = assignPlayerTitle(dominant);
+              return {
+                players: [{ name: 'Player', title, calibration }],
+                calibrationStep: 3,
+                playerHealth: [10, 10],
+                round: 0,
+                finalScore: [0, 0],
+                playerHistory: [],
+                pendingMoves: [null, null],
+              };
+            }),
+          },
+          // Solo mode without tutorial: go straight to battle
+          {
+            guard: ({ context }) => context.calibrationStep === 2 && context.gameMode === 'solo' && !context.tutorialMode,
             target: 'BATTLE_LOOP',
             actions: assign(({ context }) => {
               const cs = context.calibrationSamples.p1;
@@ -192,6 +218,13 @@ export const gameMachine = createMachine({
             }),
           },
         ],
+      },
+    },
+
+    TUTORIAL: {
+      on: {
+        START_BATTLE: { target: 'BATTLE_LOOP' },
+        SKIP_TUTORIAL: { target: 'BATTLE_LOOP' },
       },
     },
 
@@ -309,7 +342,7 @@ export const gameMachine = createMachine({
 
     RESULT_DISPLAY: {
       after: {
-        3500: [
+        5000: [
           {
             guard: ({ context }) =>
               context.playerHealth[0] <= 0 ||
