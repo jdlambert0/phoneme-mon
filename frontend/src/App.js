@@ -46,6 +46,7 @@ export default function App() {
   const detectIntervalRef = useRef(null);
   const hasNarratedRef  = useRef({});
   const auiRef          = useRef(null);
+  const startListenRef  = useRef(null);
 
   const audioEngine  = useAudioEngine();
   const oracle       = useOracleVoice(ctx.oraclePersonality, ctx.oracleGender);
@@ -172,6 +173,9 @@ export default function App() {
     }, LISTEN_WINDOW_MS);
   }, [ctx, audioEngine, oracleNarrate, send, webrtc]);
 
+  // Keep startListenWindow ref current to avoid stale closures in effects
+  useEffect(() => { startListenRef.current = startListenWindow; }, [startListenWindow]);
+
   // ── STATE EFFECTS ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (stateName !== 'BATTLE_LOOP') return;
@@ -180,8 +184,8 @@ export default function App() {
     replay.startRecording();
     auiRef.current?.playEvent('enemy_reveal');
     const intro = getNarration('install', ctx.oraclePersonality);
-    oracleSay(intro, () => setTimeout(startListenWindow, 800));
-  }, [stateName]); // eslint-disable-line
+    oracleSay(intro, () => setTimeout(() => startListenRef.current?.(), 800));
+  }, [stateName, ctx.oraclePersonality, oracleSay, replay]);
 
   // New round: resume listen
   useEffect(() => {
@@ -190,9 +194,9 @@ export default function App() {
       const key = `round-${ctx.round}`;
       if (hasNarratedRef.current[key]) return;
       hasNarratedRef.current[key] = true;
-      setTimeout(startListenWindow, 600);
+      setTimeout(() => startListenRef.current?.(), 600);
     }
-  }, [ctx.pendingMoves, ctx.round, stateName]); // eslint-disable-line
+  }, [ctx.pendingMoves, ctx.round, stateName]);
 
   // Round result narration + AUI
   useEffect(() => {
@@ -219,7 +223,7 @@ export default function App() {
         : ctx.roundWinner === 'p2' ? 'lose_round' : 'tie_round';
       oracleSay(getNarration(narKey, ctx.oraclePersonality));
     }
-  }, [stateName, ctx.round]); // eslint-disable-line
+  }, [stateName, ctx.round, ctx.pendingMoves, ctx.articulationScores, ctx.roundWinner, ctx.glassDaggerActive, ctx.oraclePersonality, oracleSay, replay]);
 
   // End game
   useEffect(() => {
@@ -242,13 +246,13 @@ export default function App() {
         }),
       }).catch(() => {});
     }
-  }, [stateName]); // eslint-disable-line
+  }, [stateName, ctx.winner, ctx.oraclePersonality, ctx.players, ctx.finalScore, oracleSay, replay]);
 
   // Stream features to replay recorder
   useEffect(() => {
     if (!audioEngine.latestFeatures) return;
     replay.recordFrame(audioEngine.latestFeatures);
-  }, [audioEngine.latestFeatures]); // eslint-disable-line
+  }, [audioEngine.latestFeatures, replay]);
 
   // Cleanup
   useEffect(() => () => {

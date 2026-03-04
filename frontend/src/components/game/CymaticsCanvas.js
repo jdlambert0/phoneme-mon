@@ -2,7 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { GOLDEN_RATIO, icosahedronVertices2D } from '../../utils/dspMath';
 
 const TOTAL_PARTICLES = 5200;
-const PHI = GOLDEN_RATIO;
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return { r, g, b };
+}
 
 function createSprite(color = '#ffffff') {
   const s = document.createElement('canvas');
@@ -50,6 +56,16 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
   const rafRef = useRef(null);
   const lastPhonemeRef = useRef(null);
 
+  // Use refs for values accessed inside animation loop to avoid re-creating loop
+  const featuresRef = useRef(features);
+  const activePhonemeRef = useRef(activePhoneme);
+  const gameStateRef = useRef(gameState);
+
+  // Keep refs in sync with props
+  useEffect(() => { featuresRef.current = features; }, [features]);
+  useEffect(() => { activePhonemeRef.current = activePhoneme; }, [activePhoneme]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
   useEffect(() => {
     spritesRef.current = {
       burst: createSprite('rgb(255,42,109)'),
@@ -82,6 +98,7 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
     }
   }, [activePhoneme, features]);
 
+  // Single animation loop — set up once, reads from refs
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -94,6 +111,10 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
     window.addEventListener('resize', resize);
 
     const draw = () => {
+      const curFeatures = featuresRef.current;
+      const curPhoneme = activePhonemeRef.current;
+      const curGameState = gameStateRef.current;
+
       const ctx = canvas.getContext('2d');
       const w = canvas.width, h = canvas.height;
 
@@ -102,13 +123,13 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
       ctx.fillRect(0, 0, w, h);
 
       const cx = w / 2, cy = h / 2;
-      const rms = features?.rms || 0;
-      const centroid = features?.spectralCentroid || 1000;
+      const rms = curFeatures?.rms || 0;
+      const centroid = curFeatures?.spectralCentroid || 1000;
 
       // Ambient particle respawn
       if (Math.random() < 0.3) {
         particlesRef.current.push(createParticle(
-          Math.random() * w, Math.random() * h, 'ambient', features
+          Math.random() * w, Math.random() * h, 'ambient', curFeatures
         ));
       }
 
@@ -140,7 +161,7 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
       ctx.globalAlpha = 1;
 
       // Icosahedron vertices for Tone phoneme
-      if (activePhoneme === 'tone' || (gameState === 'CALIBRATION')) {
+      if (curPhoneme === 'tone' || curGameState === 'CALIBRATION') {
         rotationRef.current += 0.008;
         const verts = icosahedronVertices2D(
           cx, cy,
@@ -170,25 +191,19 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
       // Voice circle indicator (RMS)
       if (rms > 0.01) {
         const pulseR = 30 + rms * 200;
-        const color = activePhoneme === 'burst' ? '#FF2A6D' : activePhoneme === 'flow' ? '#05D9E8' : '#D1F7FF';
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseR);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.6, 'rgba(0,0,0,0)');
-        grad.addColorStop(0.85, color.replace('#', 'rgba(') + ',0.15)'); // fallback
-        grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.beginPath();
-        ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+        const hexColor = curPhoneme === 'burst' ? '#FF2A6D' : curPhoneme === 'flow' ? '#05D9E8' : '#D1F7FF';
+        const rgb = hexToRgb(hexColor);
 
         // Simple glow ring
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = Math.min(rms * 4, 0.6);
+        ctx.beginPath();
+        ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${Math.min(rms * 4, 0.6)})`;
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        ctx.globalAlpha = 1;
       }
 
       // Centroid frequency sweep line
-      if (features?.spectralCentroid > 500) {
+      if (curFeatures?.spectralCentroid > 500) {
         const freq = Math.min(centroid / 8000, 1);
         const lineY = cy + (0.5 - freq) * h * 0.5;
         ctx.strokeStyle = 'rgba(5,217,232,0.08)';
@@ -207,7 +222,7 @@ export const CymaticsCanvas = ({ features, activePhoneme, gameState }) => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, [features, activePhoneme, gameState]);
+  }, []); // Only run once — reads from refs
 
   return (
     <canvas
