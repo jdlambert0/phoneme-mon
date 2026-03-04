@@ -1,0 +1,155 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "Anti-AI Creative Designer",
+    "mission": "Create a 100% voice-controlled, auditory-first battle interface that feels like an ancient alien technology found in a deep ocean void. Visuals are secondary to sound but must be hypnotic and precise.",
+    "principles": [
+      "Sound is the UI: If it can be heard, it doesn't need to be seen.",
+      "Diegetic Everything: No menus. The game world IS the interface.",
+      "Cymatic Precision: Visuals must mathematically represent audio physics.",
+      "Darkness is the Canvas: Use deep voids to make light (sound) pop."
+    ]
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Cinzel, serif",
+      "data": "Rajdhani, sans-serif",
+      "body": "Manrope, sans-serif"
+    },
+    "font_weights": {
+      "light": 300,
+      "regular": 400,
+      "bold": 700,
+      "black": 900
+    },
+    "usage": {
+      "oracle_voice": "font-headings text-3xl md:text-5xl tracking-widest uppercase text-center",
+      "hud_data": "font-data text-xs md:text-sm tracking-wider uppercase opacity-70",
+      "calibration_text": "font-body text-base md:text-lg tracking-wide text-muted-foreground"
+    },
+    "installation": "IMMEDIATE ACTION: Add these fonts via Google Fonts in index.html: <link href='https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Manrope:wght@300;400;700&family=Rajdhani:wght@400;600;700&display=swap' rel='stylesheet'>"
+  },
+  "colors": {
+    "palette": {
+      "void": {
+        "pure": "#000000",
+        "deep": "#030305",
+        "surface": "#0A0A0C",
+        "overlay": "rgba(3, 3, 5, 0.85)"
+      },
+      "phonemes": {
+        "burst": "#FF2A6D",
+        "flow": "#05D9E8",
+        "tone": "#D1F7FF"
+      },
+      "status": {
+        "success": "#00FF94",
+        "warning": "#FFD700",
+        "error": "#FF0055",
+        "active": "#FFFFFF"
+      }
+    },
+    "semantic": {
+      "background": "bg-[#030305]",
+      "text_primary": "text-[#F0F0F0]",
+      "text_muted": "text-[#888899]",
+      "border_subtle": "border-[#ffffff]/10",
+      "glow_burst": "shadow-[0_0_30px_-5px_#FF2A6D]",
+      "glow_flow": "shadow-[0_0_30px_-5px_#05D9E8]",
+      "glow_tone": "shadow-[0_0_30px_-5px_#D1F7FF]"
+    }
+  },
+  "visual_enhancers": {
+    "effects": {
+      "crt_overlay": "pointer-events-none fixed inset-0 z-50 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.03] mix-blend-overlay",
+      "scanline": "background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1)); background-size: 100% 4px;",
+      "glass_panel": "backdrop-blur-xl bg-black/40 border border-white/5 shadow-2xl"
+    },
+    "animations": {
+      "breathe": "animate-pulse duration-[3000ms]",
+      "drift": "animate-[drift_20s_linear_infinite]",
+      "glitch": "animate-glitch"
+    }
+  },
+  "component_library": {
+    "core_components": [
+      {
+        "name": "CymaticsCanvas",
+        "path": "/src/components/game/CymaticsCanvas.js",
+        "description": "The main viewport. Renders 5000+ particles in a golden ratio distribution. Reacts to AudioWorklet data (RMS, Centroid).",
+        "tech": "Canvas API (2D) or React Three Fiber",
+        "style": "fixed inset-0 z-0 bg-void-deep"
+      },
+      {
+        "name": "OracleDisplay",
+        "path": "/src/components/ui/OracleDisplay.js",
+        "description": "Displays the Oracle's speech text when TTS is active. Text should fade in/out letter by letter or word by word.",
+        "style": "fixed top-1/4 w-full text-center px-8 z-20 pointer-events-none mix-blend-screen"
+      },
+      {
+        "name": "VoiceInputViz",
+        "path": "/src/components/ui/VoiceInputViz.js",
+        "description": "Circular or waveform visualization of the user's mic input. Expands on amplitude (RMS). Colors shift based on detected phoneme (Burst=Red, Flow=Cyan).",
+        "style": "fixed bottom-12 left-1/2 -translate-x-1/2 z-30"
+      },
+      {
+        "name": "TouchToLink",
+        "path": "/src/components/screens/TouchToLink.js",
+        "description": "Boot screen. A single pulsing fingerprint or geometric rune. Requires user interaction to initialize AudioContext.",
+        "style": "flex items-center justify-center h-screen w-screen bg-black cursor-pointer"
+      }
+    ]
+  },
+  "layouts": {
+    "grid_system": "Use absolute positioning for HUD elements. The center is reserved for the Cymatics Canvas.",
+    "spacing": "Generous. HUD elements should be pushed to the edges (p-6 or p-8).",
+    "z_index": {
+      "canvas": 0,
+      "vignette": 10,
+      "ui_layer": 20,
+      "modal": 50,
+      "cursor": 100
+    }
+  },
+  "assets": {
+    "images": [
+      {
+        "category": "background_texture",
+        "url": "https://images.unsplash.com/photo-1762281429507-a0384348f4b1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMHNvdW5kJTIwd2F2ZSUyMG5lb24lMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI2NDQ0MDJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract blue wavy lines on black background. Use as subtle overlay on Boot screen with low opacity."
+      },
+      {
+        "category": "particles_texture",
+        "url": "https://images.unsplash.com/photo-1759771963975-8a4885446f1f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMHNvdW5kJTIwd2F2ZSUyMG5lb24lMjBkYXJrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzI2NDQ0MDJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Glowing purple ring. Use for 'Tone' phoneme visualization reference."
+      }
+    ],
+    "icons": "Use 'lucide-react' for minimal UI icons (Mic, Volume, Settings). Stick to thin strokes (stroke-width={1.5})."
+  },
+  "instructions_to_main_agent": [
+    "1. SYSTEM INIT: Initialize the app with a 'Touch to Link' screen. Do not auto-play audio.",
+    "2. AUDIO ENGINE: The AudioContext MUST be the source of truth. The visual layer is just a renderer for the audio state.",
+    "3. NO SCROLLING: The app is a single-screen experience (PWA). overflow-hidden on body.",
+    "4. ACCESSIBILITY: Even though it's audio-first, ensure screen readers can announce the Oracle's text.",
+    "5. SHADCN: Use Shadcn for the 'Settings' or 'Calibration' modals, but strip the default white backgrounds. Make them glass panels.",
+    "6. MICROPHONE: Handle permission denial gracefully. The game cannot function without it, so show a clear, diegetic 'Link Broken' message."
+  ],
+  "universal_guidelines": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Components MUST use named exports (export const ComponentName = ...).",
+    "Pages MUST use default exports (export default function PageName() {...}).",
+    "Use 'sonner' for toasts."
+  ]
+}
