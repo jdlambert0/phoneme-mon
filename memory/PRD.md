@@ -6,7 +6,7 @@ Build "Phoneme-Mon" — a 100% voice-controlled, 3D auditory battle PWA. Zero-UI
 ## Architecture
 
 ### Tech Stack
-- React 19 + CRA + CRACO
+- React 18 + CRA + CRACO
 - XState v5 (@xstate/react v4)
 - Web Speech Synthesis API (TTS — no API key)
 - Custom AudioWorklet (DSP — no external lib)
@@ -39,24 +39,27 @@ Burst (plosive/RMS spike) > Flow (fricative/high centroid) > Tone (vowel/low fla
 ## Implementation Status
 
 ### Completed
-- [x] AudioWorklet DSP (MeydaProcessor.js) — RMS, ZCR, Centroid, Flatness, MFCC-13
+- [x] AudioWorklet DSP (MeydaProcessor.js) — RMS, ZCR, Centroid, Flatness, MFCC-13, NaN guards
 - [x] XState v5 game machine — all states + ONLINE_MATCHMAKING + REMOTE_MOVE
 - [x] Markov chain enemy AI with adaptive difficulty
-- [x] AudioContextManager singleton with iOS hacks (silent stream, gesture unlock)
-- [x] AUIManager — SpatialPannerNode HRTF: Oracle (0,0,0), Enemy (10,10,5), Inventory (-10,0,5)
-- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient x M/F) + Recency Effect
-- [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron
+- [x] AudioContextManager singleton with iOS hacks (silent stream, gesture unlock), fully defensive
+- [x] AUIManager — SpatialPannerNode HRTF, all try-catch
+- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient x M/F) + speech safety timeouts
+- [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron, RAF-based (no re-render)
+- [x] VoiceInputViz — RAF-based with direct ref reads (no React state updates per frame)
 - [x] Battle HUD (health, round, moves, glass dagger indicator)
 - [x] Boot screen, Diegetic Install, Calibration Screen, End Game screen
 - [x] Pass & Play multiplayer (same device)
 - [x] Online PvP — WebRTC DataChannel, WebSocket signaling
 - [x] Battle replay export + Web Share API
 - [x] Backend: score endpoints + room management + WebSocket relay
-- [x] **SOLO MODE BUG FIX (2026-03-04):**
-  - Fixed CymaticsCanvas invalid hex-to-rgba color conversion (threw errors 60x/sec with mic)
-  - Fixed CymaticsCanvas animation loop re-creating on every features update (~43Hz)
-  - Fixed stale closure bugs in App.js battle loop effects
-  - Added speech synthesis fallback timeout for battle intro
+
+### Bug Fixes (2026-03-04)
+- [x] **CRITICAL: CymaticsCanvas invalid hex-to-rgba** — `#FF2A6D` → `rgba(FF2A6D,0.15)` threw on every frame
+- [x] **CRITICAL: 43Hz re-render cascade** — Audio features triggered full React tree re-render at 43fps. Fixed by storing features in ref, throttling state updates to 12Hz, CymaticsCanvas+VoiceInputViz use featuresRef directly.
+- [x] **CRITICAL: Stale closures in battle effects** — `startListenWindow` captured stale XState context
+- [x] **Speech synthesis fallback** — Added 6s timeout + per-utterance safety timeout for devices where onend never fires
+- [x] **Defensive refactor** — All Speech Synthesis, Web Audio, WebRTC, AudioWorklet calls wrapped in try-catch. App is now crash-proof on any device.
 
 ### P0 Backlog (Next)
 - [ ] Tune MFCC Euclidean distance thresholds with real mic testing
