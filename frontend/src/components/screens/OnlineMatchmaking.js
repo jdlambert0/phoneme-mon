@@ -27,7 +27,7 @@ export default function OnlineMatchmaking({ onRoomReady, onBack, connectionStatu
 
   const joinRoom = useCallback(async () => {
     const clean = inputCode.trim().toUpperCase();
-    if (clean.length < 4) { setError('Enter the 5-character room code.'); return; }
+    if (clean.length < 5) { setError('Enter the full 5-character room code.'); return; }
     setLoading(true);
     setError('');
     try {
@@ -119,7 +119,7 @@ export default function OnlineMatchmaking({ onRoomReady, onBack, connectionStatu
             <button
               data-testid="join-room-btn"
               onClick={joinRoom}
-              disabled={loading || inputCode.length < 4}
+              disabled={loading || inputCode.length < 5}
               style={{
                 width: '100%', fontFamily: 'Rajdhani', fontSize: 10, letterSpacing: 4,
                 color: 'rgba(255,255,255,0.7)', background: 'transparent',

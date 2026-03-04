@@ -107,7 +107,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
 
       {phase === 'mode_select' && (
         <div style={{ marginTop: 140, display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: 360 }}>
-          <div style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 5, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: 16, textTransform: 'uppercase' }}>
+        <div style={{ fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 5, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', marginBottom: 16 }}>
             Select Mode
           </div>
           {GAME_MODES.map(({ id, label, desc }) => (
@@ -128,7 +128,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures }) 
               onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'}
             >
               <div>{label}</div>
-              <div style={{ fontFamily: 'Manrope', fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4, letterSpacing: 1 }}>{desc}</div>
+              <div style={{ fontFamily: 'Manrope', fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: 1 }}>{desc}</div>
             </button>
           ))}
 

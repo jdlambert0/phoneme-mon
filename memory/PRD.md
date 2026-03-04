@@ -91,13 +91,13 @@ Burst (plosive/RMS spike) > Flow (fricative/high centroid) > Tone (vowel/low fla
 - iOS apple-mobile-web-app-capable meta
 
 ## Implementation Status
-### Completed (2026-02-XX)
+### Completed (Phase 1 + Phase 2 enhancements)
 - [x] AudioWorklet DSP (MeydaProcessor.js) — RMS, ZCR, Centroid, Flatness, MFCC-13
-- [x] XState v5 game machine — all states + transitions
+- [x] XState v5 game machine — all states + ONLINE_MATCHMAKING + REMOTE_MOVE
 - [x] Markov chain enemy AI with adaptive difficulty
-- [x] AudioContextManager singleton with iOS hacks
-- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient × M/F)
-- [x] Recency Effect narration system
+- [x] AudioContextManager singleton with iOS hacks (silent stream, gesture unlock)
+- [x] **AUIManager** — SpatialPannerNode HRTF: Oracle (0,0,0), Enemy (10,10,5), Inventory (-10,0,5)
+- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient × M/F) + Recency Effect
 - [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron
 - [x] Oracle Display with typewriter animation
 - [x] VoiceInputViz RMS circle
@@ -105,25 +105,23 @@ Burst (plosive/RMS spike) > Flow (fricative/high centroid) > Tone (vowel/low fla
 - [x] Boot screen (TOUCH TO LINK)
 - [x] Diegetic Install (Oracle explains rules, player chooses personality by phoneme OR tap)
 - [x] Calibration Screen (3-phoneme MFCC mapping, auto-advance)
-- [x] End Game screen
-- [x] Pass & Play multiplayer (same device)
-- [x] Backend score endpoints
-- [x] PWA manifest
+- [x] End Game screen with **SHARE REPLAY button**
+- [x] **Pass & Play** multiplayer (same device)
+- [x] **Online PvP** — WebRTC DataChannel, WebSocket signaling server on backend
+- [x] **localStorage calibration profiles** — returning players identified by voice
+- [x] **Battle replay export** — spectral PNG (RMS waveform + MFCC spectrogram + move markers)
+- [x] **Web Share API** — native mobile share or PNG download fallback
+- [x] Backend: score endpoints + room management + WebSocket relay
 
 ### P0 Backlog (Next Phase)
-- [ ] WebRTC PvP online multiplayer (Phase 2)
-- [ ] Save calibration profile to localStorage (return players)
-- [ ] Spatial audio (SpatialPannerNode) for Oracle/Enemy positioning
-- [ ] Leaderboard UI
-
-### P1 Backlog
-- [ ] Multiple battle arenas (different particle/color themes)
-- [ ] Score persistence with player account
+- [ ] Tune MFCC Euclidean distance thresholds with real mic testing
+- [ ] Add profile selection UI in calibration (skip re-calibration for returning voices)
 - [ ] iOS App Store PWA submission guide
 
-### P2 Backlog
-- [ ] Web Speech API command recognition (start/stop/replay)
-- [ ] Transformers.js Whisper fallback for broader browser support
+### P1 Backlog
+- [ ] Multiple battle arenas (different particle color themes)
+- [ ] Score persistence with player account name
+- [ ] Animated GIF replay export
 
 ## User Personas
 - **The Explorer**: Curious about voice interfaces, wants something novel
