@@ -40,7 +40,38 @@ class StatusCheckCreate(BaseModel):
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Phoneme-Mon API v1"}
+
+class GameScore(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    player_title: str
+    personality: str
+    rounds_won: int
+    rounds_lost: int
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class GameScoreCreate(BaseModel):
+    player_title: str
+    personality: str
+    rounds_won: int
+    rounds_lost: int
+
+@api_router.post("/scores", response_model=GameScore)
+async def save_score(score: GameScoreCreate):
+    obj = GameScore(**score.model_dump())
+    doc = obj.model_dump()
+    doc['timestamp'] = doc['timestamp'].isoformat()
+    await db.game_scores.insert_one(doc)
+    return obj
+
+@api_router.get("/scores", response_model=List[GameScore])
+async def get_scores():
+    scores = await db.game_scores.find({}, {"_id": 0}).sort("rounds_won", -1).to_list(20)
+    for s in scores:
+        if isinstance(s.get('timestamp'), str):
+            s['timestamp'] = datetime.fromisoformat(s['timestamp'])
+    return scores
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
