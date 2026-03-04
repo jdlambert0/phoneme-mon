@@ -184,7 +184,15 @@ export default function App() {
     replay.startRecording();
     auiRef.current?.playEvent('enemy_reveal');
     const intro = getNarration('install', ctx.oraclePersonality);
-    oracleSay(intro, () => setTimeout(() => startListenRef.current?.(), 800));
+    let started = false;
+    const startOnce = () => {
+      if (started) return;
+      started = true;
+      setTimeout(() => startListenRef.current?.(), 800);
+    };
+    oracleSay(intro, startOnce);
+    // Fallback: if speech callback never fires, start listen after 6s
+    setTimeout(startOnce, 6000);
   }, [stateName, ctx.oraclePersonality, oracleSay, replay]);
 
   // New round: resume listen

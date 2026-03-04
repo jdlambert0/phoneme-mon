@@ -3,132 +3,80 @@
 ## Problem Statement
 Build "Phoneme-Mon" — a 100% voice-controlled, 3D auditory battle PWA. Zero-UI auditory environment where players vocalize phonemes to play RPS-style combat, analyzed in real-time via AudioWorklet DSP. Diegetic everything — no menus, Oracle narrates via 3D spatial audio.
 
-## Design Philosophy (Three Lenses)
-1. **Simple over Easy** (Rich Hickey via Easy/Simple transcript): Rules are simple (3 moves, RPS triangle), mastery is hard — spectral physics don't lie.
-2. **Outloop Agentic Design** (Stripe Minions): Oracle + Enemy are autonomous agents. No menus. XState is the blueprint engine. DSP is the tool shed.
-3. **Procedural Rhetoric** (Ian Bogost): The game argues "your voice is a precision instrument." Calibration = identity. Glass Dagger = procedural compassion.
-
 ## Architecture
 
 ### Tech Stack
 - React 19 + CRA + CRACO
 - XState v5 (@xstate/react v4)
 - Web Speech Synthesis API (TTS — no API key)
-- Web Speech API SpeechRecognition (optional commands)
 - Custom AudioWorklet (DSP — no external lib)
 - Canvas 2D (cymatics)
 - FastAPI + MongoDB (minimal backend)
 
-### Module Structure (Strict Decoupling)
+### Module Structure
 ```
 src/worklets/         AudioWorklet DSP (MeydaProcessor.js in public/)
 src/machines/         XState v5 game machine + Markov enemy AI
-src/hooks/            useAudioEngine (worklet bridge) + useOracleVoice (TTS)
-src/utils/            AudioContextManager, dspMath, narrationStrings, speechUtils
+src/hooks/            useAudioEngine, useOracleVoice, useBattleReplay, useWebRTC, useCalibrationProfiles
+src/utils/            AudioContextManager, AUIManager, dspMath, narrationStrings, speechUtils
 src/components/
-  screens/            BootScreen, DiegeticInstall, CalibrationScreen, EndGameScreen
-  game/               CymaticsCanvas (5000+ particles), BattleHUD
-  ui/                 OracleDisplay (typewriter), VoiceInputViz (RMS circle)
+  screens/            BootScreen, DiegeticInstall, CalibrationScreen, EndGameScreen, OnlineMatchmaking
+  game/               CymaticsCanvas, BattleHUD
+  ui/                 OracleDisplay, VoiceInputViz
 ```
 
 ## Game States (XState v5)
 ```
-INIT_BOOT → (TOUCH) →
-DIEGETIC_INSTALL → (SET_ORACLE: personality+gender+mode) →
-CALIBRATION → (NEXT_CALIBRATION_PHASE × 3 or 6) →
-BATTLE_LOOP → (COMMIT_MOVE or TIMEOUT_MOVE) →
-RESULT_DISPLAY → (after 3.5s) →
-END_GAME → (REPLAY) → INIT_BOOT
+INIT_BOOT → DIEGETIC_INSTALL → CALIBRATION → BATTLE_LOOP ↔ RESULT_DISPLAY → END_GAME
+                              → ONLINE_MATCHMAKING (for online mode)
 ```
-
-## Oracle Voice System
-- 3 personalities × 2 genders = 6 voice configurations
-- Mentor F/M, Rival F/M, Ancient F/M
-- Selected diegetically: first phoneme detected → Oracle type (Burst=Rival, Flow=Mentor, Tone=Ancient)
-- Web Speech Synthesis with pitch/rate tuning per personality
-- Recency Effect: avoids repeating last 5 narration strings
-- iOS fix: keep-alive interval + silent stream hack
-
-## DSP Pipeline (AudioWorklet)
-- 512-sample circular buffer (4 × 128 quantum)
-- Hann windowing → Cooley-Tukey FFT → Power spectrum
-- Features: RMS, ZCR, Spectral Centroid, Spectral Flatness, MFCC-13
-- Mel filterbank: 26 filters, 0–22050 Hz
-- Posts features ~43Hz to main thread
 
 ## RPS Logic
 ```
 Burst (plosive/RMS spike) > Flow (fricative/high centroid) > Tone (vowel/low flatness) > Burst
 ```
 
-## Glass Dagger
-- Activates when articulation score is low (MFCC Euclidean distance from calibration > 0.7)
-- Oracle narrates the compensation
-- Prevents total loss for unclear speakers
-
-## Enemy AI (Markov Chain)
-- Order-2 Markov transition matrix on player move history
-- Adaptive difficulty: increases by round, decreases if player struggling
-- Counters predicted player move
-
-## Cymatics Canvas
-- 5,200 physics particles (ambient + phoneme-triggered bursts)
-- Off-screen sprite canvas for performance
-- Icosahedron vertices (Golden Ratio φ=1.618) for Tone visualization
-- 3D rotation projected to 2D
-- RMS → particle velocity, Centroid → color hue, Flatness → spread
-
-## Pass & Play Multiplayer
-- Both players calibrate MFCC fingerprints sequentially
-- Oracle assigns character title based on dominant phoneme
-- Turn-based with "PASS THE DEVICE" overlay between turns
-- Each player's calibration stored separately in XState context
-
-## iOS PWA Hardening
-- AudioContext.resume() on first user gesture only
-- Silent Stream hack: silent oscillator → MediaStreamDestination → prevents suspension
-- PWA manifest: standalone mode, theme-color #000000
-- iOS apple-mobile-web-app-capable meta
-
 ## Implementation Status
-### Completed (Phase 1 + Phase 2 enhancements)
+
+### Completed
 - [x] AudioWorklet DSP (MeydaProcessor.js) — RMS, ZCR, Centroid, Flatness, MFCC-13
 - [x] XState v5 game machine — all states + ONLINE_MATCHMAKING + REMOTE_MOVE
 - [x] Markov chain enemy AI with adaptive difficulty
 - [x] AudioContextManager singleton with iOS hacks (silent stream, gesture unlock)
-- [x] **AUIManager** — SpatialPannerNode HRTF: Oracle (0,0,0), Enemy (10,10,5), Inventory (-10,0,5)
-- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient × M/F) + Recency Effect
+- [x] AUIManager — SpatialPannerNode HRTF: Oracle (0,0,0), Enemy (10,10,5), Inventory (-10,0,5)
+- [x] 6 Oracle voice configurations (Mentor/Rival/Ancient x M/F) + Recency Effect
 - [x] Cymatics Canvas — 5,200 particles, golden ratio icosahedron
-- [x] Oracle Display with typewriter animation
-- [x] VoiceInputViz RMS circle
 - [x] Battle HUD (health, round, moves, glass dagger indicator)
-- [x] Boot screen (TOUCH TO LINK)
-- [x] Diegetic Install (Oracle explains rules, player chooses personality by phoneme OR tap)
-- [x] Calibration Screen (3-phoneme MFCC mapping, auto-advance)
-- [x] End Game screen with **SHARE REPLAY button**
-- [x] **Pass & Play** multiplayer (same device)
-- [x] **Online PvP** — WebRTC DataChannel, WebSocket signaling server on backend
-- [x] **localStorage calibration profiles** — returning players identified by voice
-- [x] **Battle replay export** — spectral PNG (RMS waveform + MFCC spectrogram + move markers)
-- [x] **Web Share API** — native mobile share or PNG download fallback
+- [x] Boot screen, Diegetic Install, Calibration Screen, End Game screen
+- [x] Pass & Play multiplayer (same device)
+- [x] Online PvP — WebRTC DataChannel, WebSocket signaling
+- [x] Battle replay export + Web Share API
 - [x] Backend: score endpoints + room management + WebSocket relay
+- [x] **SOLO MODE BUG FIX (2026-03-04):**
+  - Fixed CymaticsCanvas invalid hex-to-rgba color conversion (threw errors 60x/sec with mic)
+  - Fixed CymaticsCanvas animation loop re-creating on every features update (~43Hz)
+  - Fixed stale closure bugs in App.js battle loop effects
+  - Added speech synthesis fallback timeout for battle intro
 
-### P0 Backlog (Next Phase)
+### P0 Backlog (Next)
 - [ ] Tune MFCC Euclidean distance thresholds with real mic testing
-- [ ] Add profile selection UI in calibration (skip re-calibration for returning voices)
-- [ ] iOS App Store PWA submission guide
+- [ ] Advanced Phoneme Tuning screen (record/fine-tune phoneme samples)
+- [ ] Profile selection UI in calibration (skip re-calibration)
 
 ### P1 Backlog
-- [ ] Multiple battle arenas (different particle color themes)
-- [ ] Score persistence with player account name
-- [ ] Animated GIF replay export
+- [ ] Enemy AI Variety (aggressive, defensive personalities)
+- [ ] Multiple battle arenas (different particle themes)
+- [ ] Score persistence with player names
+- [ ] Global leaderboards
 
-## User Personas
-- **The Explorer**: Curious about voice interfaces, wants something novel
-- **The Competitive**: Pass & Play with friends/family
-- **The Creative Technologist**: Appreciates the Bogostian procedural design
+### P2 Backlog
+- [ ] Customizable Cymatics Visualizer
+- [ ] Animated GIF replay export
+- [ ] iOS App Store PWA submission guide
 
 ## API Endpoints
 - `GET /api/` — health check
 - `POST /api/scores` — save game score
 - `GET /api/scores` — leaderboard (top 20)
+- `POST /api/rooms` — create online room
+- `WS /api/ws/room/{code}/{role}` — WebSocket signaling
