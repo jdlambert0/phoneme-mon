@@ -1,12 +1,14 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import random
+import string
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone
 
@@ -87,15 +89,61 @@ async def create_status_check(input: StatusCheckCreate):
 
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
     status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
     for check in status_checks:
         if isinstance(check['timestamp'], str):
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
     return status_checks
+
+# ── WebRTC Signaling ──────────────────────────────────────────────────────────
+# In-memory rooms: { room_code: { 'host': WebSocket | None, 'guest': WebSocket | None } }
+_rooms: Dict[str, Dict[str, Optional[WebSocket]]] = {}
+
+def _gen_code(length=5):
+    chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    return ''.join(random.choices(chars, k=length))
+
+@api_router.post("/rooms")
+async def create_room():
+    for _ in range(20):
+        code = _gen_code()
+        if code not in _rooms:
+            _rooms[code] = {'host': None, 'guest': None}
+            return {"room_code": code, "role": "host"}
+    raise ValueError("Could not generate unique room code")
+
+@api_router.get("/rooms/{code}/exists")
+async def room_exists(code: str):
+    c = code.upper()
+    return {"exists": c in _rooms, "has_host": bool(_rooms.get(c, {}).get('host'))}
+
+@app.websocket("/api/ws/room/{room_code}/{role}")
+async def ws_room(websocket: WebSocket, room_code: str, role: str):
+    code = room_code.upper()
+    if code not in _rooms:
+        _rooms[code] = {'host': None, 'guest': None}
+    if role not in ('host', 'guest'):
+        await websocket.close(1008)
+        return
+
+    await websocket.accept()
+    _rooms[code][role] = websocket
+    other = 'guest' if role == 'host' else 'host'
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            peer = _rooms[code].get(other)
+            if peer:
+                try:
+                    await peer.send_text(data)
+                except Exception:
+                    pass
+    except (WebSocketDisconnect, Exception):
+        _rooms[code][role] = None
+        # Clean up empty rooms
+        if not any(_rooms[code].values()):
+            _rooms.pop(code, None)
 
 # Include the router in the main app
 app.include_router(api_router)

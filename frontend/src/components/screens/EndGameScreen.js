@@ -2,7 +2,7 @@ import React from 'react';
 
 const PHONEME_COLORS = { burst: '#FF2A6D', flow: '#05D9E8', tone: '#D1F7FF' };
 
-export default function EndGameScreen({ winner, players, finalScore, gameMode, onReplay, personality }) {
+export default function EndGameScreen({ winner, players, finalScore, gameMode, onReplay, onShare, personality }) {
   const isP1Win = winner === 'p1';
   const isTie = winner === 'tie';
   const p1 = players?.[0] || { title: 'You' };
@@ -78,25 +78,41 @@ export default function EndGameScreen({ winner, players, finalScore, gameMode, o
       </div>
 
       {/* Replay */}
-      <button
-        data-testid="replay-button"
-        onClick={onReplay}
-        style={{
-          fontFamily: 'Rajdhani, sans-serif',
-          fontSize: 11, letterSpacing: 6,
-          color: 'rgba(255,255,255,0.7)',
-          background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.15)',
-          padding: '14px 40px',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          transition: 'border-color 0.2s ease, color 0.2s ease',
-        }}
-        onMouseEnter={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.5)'; e.target.style.color = '#fff'; }}
-        onMouseLeave={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.15)'; e.target.style.color = 'rgba(255,255,255,0.7)'; }}
-      >
-        LINK AGAIN
-      </button>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <button
+          data-testid="replay-button"
+          onClick={onReplay}
+          style={{
+            fontFamily: 'Rajdhani, sans-serif', fontSize: 11, letterSpacing: 6,
+            color: 'rgba(255,255,255,0.7)', background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.15)', padding: '14px 40px',
+            textTransform: 'uppercase', cursor: 'pointer',
+            transition: 'border-color 0.2s ease, color 0.2s ease',
+          }}
+          onMouseEnter={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.5)'; e.target.style.color = '#fff'; }}
+          onMouseLeave={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.15)'; e.target.style.color = 'rgba(255,255,255,0.7)'; }}
+        >
+          LINK AGAIN
+        </button>
+
+        {onShare && (
+          <button
+            data-testid="share-replay-button"
+            onClick={onShare}
+            style={{
+              fontFamily: 'Rajdhani, sans-serif', fontSize: 11, letterSpacing: 6,
+              color: '#05D9E8', background: 'transparent',
+              border: '1px solid rgba(5,217,232,0.25)', padding: '14px 40px',
+              textTransform: 'uppercase', cursor: 'pointer',
+              transition: 'border-color 0.2s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = '#05D9E8'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(5,217,232,0.25)'}
+          >
+            SHARE REPLAY
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -9,14 +9,18 @@ import { getEnemyMove, computeDifficulty } from './enemyAI';
 export const INITIAL_CONTEXT = {
   oraclePersonality: 'mentor',
   oracleGender: 'female',
-  gameMode: 'solo',
+  gameMode: 'solo', // 'solo' | 'passplay' | 'online'
+
+  // Online
+  roomCode: null,
+  onlineRole: null, // 'host' | 'guest'
 
   // Calibration
-  calibrationStep: 0, // 0–2 = P1 phonemes, 3–5 = P2 phonemes (passplay)
+  calibrationStep: 0,
   calibrationSamples: { p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } },
 
   // Players
-  players: [], // [{ name, title, calibration: { burst, flow, tone } }]
+  players: [],
 
   // Battle state
   playerHealth: [10, 10],
@@ -25,7 +29,7 @@ export const INITIAL_CONTEXT = {
   pendingMoves: [null, null],
   articulationScores: [0, 0],
   glassDaggerActive: [false, false],
-  playerHistory: [], // for Markov enemy AI
+  playerHistory: [],
   difficulty: 0.3,
   currentTurn: 0,
 
@@ -57,17 +61,46 @@ export const gameMachine = createMachine({
 
     DIEGETIC_INSTALL: {
       on: {
-        SET_ORACLE: {
+        SET_ORACLE: [
+          // Online mode → matchmaking first
+          {
+            guard: ({ event }) => event.gameMode === 'online',
+            target: 'ONLINE_MATCHMAKING',
+            actions: assign({
+              oraclePersonality: ({ event }) => event.personality,
+              oracleGender:      ({ event }) => event.gender,
+              gameMode:          () => 'online',
+              calibrationStep:   () => 0,
+              calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
+              players: () => [],
+            }),
+          },
+          // Solo / PassPlay → straight to calibration
+          {
+            target: 'CALIBRATION',
+            actions: assign({
+              oraclePersonality: ({ event }) => event.personality,
+              oracleGender:      ({ event }) => event.gender,
+              gameMode:          ({ event }) => event.gameMode || 'solo',
+              calibrationStep:   () => 0,
+              calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
+              players: () => [],
+            }),
+          },
+        ],
+      },
+    },
+
+    ONLINE_MATCHMAKING: {
+      on: {
+        ROOM_CONNECTED: {
           target: 'CALIBRATION',
           actions: assign({
-            oraclePersonality: ({ event }) => event.personality,
-            oracleGender: ({ event }) => event.gender,
-            gameMode: ({ event }) => event.gameMode || 'solo',
-            calibrationStep: () => 0,
-            calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
-            players: () => [],
+            roomCode:   ({ event }) => event.roomCode,
+            onlineRole: ({ event }) => event.role,
           }),
         },
+        BACK: { target: 'DIEGETIC_INSTALL' },
       },
     },
 
@@ -233,19 +266,41 @@ export const gameMachine = createMachine({
           target: 'RESULT_DISPLAY',
           actions: assign(({ context }) => {
             const playerMove = context.pendingMoves[0] || 'burst';
-            const enemyMove = getEnemyMove(context.playerHistory, 0.9);
+            const enemyMove  = context.gameMode === 'online'
+              ? (context.pendingMoves[1] || getEnemyMove(context.playerHistory, 0.5))
+              : getEnemyMove(context.playerHistory, 0.9);
             const rpsResult = resolveRPS(playerMove, enemyMove);
             let health = [...context.playerHealth];
-            let score = [...context.finalScore];
+            let score  = [...context.finalScore];
             if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
             else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
             return {
               pendingMoves: [playerMove, enemyMove],
-              playerHealth: health,
-              finalScore: score,
-              roundWinner: rpsResult,
-              round: context.round + 1,
-              currentTurn: 0,
+              playerHealth: health, finalScore: score,
+              roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
+            };
+          }),
+        },
+
+        // Online: local player committed, remote move arrives via DataChannel
+        REMOTE_MOVE: {
+          target: 'RESULT_DISPLAY',
+          actions: assign(({ context, event }) => {
+            const localMove  = context.pendingMoves[0] || 'burst';
+            const remoteMove = event.move;
+            // Host = p1, Guest = p2
+            const [m1, m2] = context.onlineRole === 'host'
+              ? [localMove, remoteMove]
+              : [remoteMove, localMove];
+            const rpsResult = resolveRPS(m1, m2);
+            let health = [...context.playerHealth];
+            let score  = [...context.finalScore];
+            if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
+            else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
+            return {
+              pendingMoves: [m1, m2],
+              playerHealth: health, finalScore: score,
+              roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
             };
           }),
         },
