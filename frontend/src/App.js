@@ -193,6 +193,23 @@ export default function App() {
   // Keep ref current for effects
   useEffect(() => { startListenRef.current = startListenWindow; }, [startListenWindow]);
 
+  // ── Save calibration profile when calibration completes ──────────────
+  useEffect(() => {
+    if (stateName !== 'BATTLE_LOOP' && stateName !== 'TUTORIAL') return;
+    if (hasNarratedRef.current['profile_saved']) return;
+    hasNarratedRef.current['profile_saved'] = true;
+    try {
+      const player = ctx.players?.[0];
+      if (player?.calibration && player?.title) {
+        saveProfile({
+          title: player.title,
+          calibration: player.calibration,
+          personality: ctx.oraclePersonality,
+        });
+      }
+    } catch {}
+  }, [stateName, ctx.players, ctx.oraclePersonality, saveProfile]);
+
   // ── STATE EFFECTS ───────────────────────────────────────────────────────
   // Battle start
   useEffect(() => {
@@ -351,11 +368,17 @@ export default function App() {
           savedProfiles={profiles}
           onAddSample={handleAddSample}
           onNextPhase={handleNextCalibPhase}
+          onBack={() => send({ type: 'BACK' })}
+          onLoadProfile={(profile) => {
+            touchProfile(profile.id);
+            send({ type: 'LOAD_PROFILE', profile });
+          }}
           oracle={{
             startCalibrationRecording: audioEngine.startCalibrationRecording,
             stopCalibrationRecording:  audioEngine.stopCalibrationRecording,
             speak: (t, cb) => oracleSay(t, cb),
           }}
+          personality={ctx.oraclePersonality}
         />
       )}
 

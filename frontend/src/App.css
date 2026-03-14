@@ -1,4 +1,5 @@
 /* Phoneme-Mon App Styles */
+/* Note: core animations (breathe, fadeInUp, etc.) are in index.css */
 
 .App {
   width: 100%;
@@ -6,21 +7,4 @@
   position: relative;
   overflow: hidden;
   background: #030305;
-}
-
-@keyframes breathe {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-@keyframes hudFlash {
-  0% { filter: brightness(1); }
-  50% { filter: brightness(2); }
-  100% { filter: brightness(1); }
-}
-
-@keyframes hudDim {
-  0% { opacity: 1; }
-  50% { opacity: 0.4; }
-  100% { opacity: 1; }
 }

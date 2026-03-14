@@ -1,15 +1,20 @@
 {
   "short_name": "Phoneme-Mon",
   "name": "Phoneme-Mon Voice Combat",
-  "description": "100% voice-controlled 3D auditory battle game",
+  "description": "100% voice-controlled RPS battle game — vocalize phonemes to fight",
   "icons": [
-    { "src": "favicon.ico", "sizes": "64x64 32x32 24x24 16x16", "type": "image/x-icon" }
+    { "src": "favicon.ico", "sizes": "48x48 32x32 16x16", "type": "image/x-icon" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ],
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#000000",
-  "background_color": "#000000",
+  "background_color": "#030305",
   "categories": ["games", "entertainment"],
   "prefer_related_applications": false
 }

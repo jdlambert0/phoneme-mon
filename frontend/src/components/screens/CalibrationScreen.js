@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { VoiceInputViz } from '../ui/VoiceInputViz';
+import { getNarration } from '../../utils/narrationStrings';
 
 const STEPS = [
-  { key: 'p1_burst', label: 'BURST', instruction: 'Produce a sharp explosive sound — "BUH" or "BAH"', color: '#FF2A6D', player: 1 },
-  { key: 'p1_flow',  label: 'FLOW',  instruction: 'Produce a sustained hissing sound — "SHHH" or "FFFF"', color: '#05D9E8', player: 1 },
-  { key: 'p1_tone',  label: 'TONE',  instruction: 'Produce a pure open vowel — "AAAH" or "OOOH"', color: '#D1F7FF', player: 1 },
-  { key: 'p2_burst', label: 'BURST', instruction: 'Player 2: produce a sharp explosive sound', color: '#FF2A6D', player: 2 },
-  { key: 'p2_flow',  label: 'FLOW',  instruction: 'Player 2: produce a sustained hissing sound', color: '#05D9E8', player: 2 },
-  { key: 'p2_tone',  label: 'TONE',  instruction: 'Player 2: produce a pure open vowel', color: '#D1F7FF', player: 2 },
+  { key: 'p1_burst', label: 'BURST', instruction: 'Produce a sharp explosive sound — "BUH" or "BAH"', color: '#FF2A6D', player: 1, narrationKey: 'calibrate_burst' },
+  { key: 'p1_flow',  label: 'FLOW',  instruction: 'Produce a sustained hissing sound — "SHHH" or "FFFF"', color: '#05D9E8', player: 1, narrationKey: 'calibrate_flow' },
+  { key: 'p1_tone',  label: 'TONE',  instruction: 'Produce a pure open vowel — "AAAH" or "OOOH"', color: '#D1F7FF', player: 1, narrationKey: 'calibrate_tone' },
+  { key: 'p2_burst', label: 'BURST', instruction: 'Player 2: produce a sharp explosive sound', color: '#FF2A6D', player: 2, narrationKey: 'calibrate_burst' },
+  { key: 'p2_flow',  label: 'FLOW',  instruction: 'Player 2: produce a sustained hissing sound', color: '#05D9E8', player: 2, narrationKey: 'calibrate_flow' },
+  { key: 'p2_tone',  label: 'TONE',  instruction: 'Player 2: produce a pure open vowel', color: '#D1F7FF', player: 2, narrationKey: 'calibrate_tone' },
 ];
 
 const RECORD_DURATION = 3000; // ms
@@ -18,11 +19,15 @@ export default function CalibrationScreen({
   gameMode = 'solo',
   latestFeatures,
   featuresRef,
+  savedProfiles = [],
   onAddSample,
   onNextPhase,
+  onBack,
+  onLoadProfile,
   oracle,
+  personality = 'mentor',
 }) {
-  const [phase, setPhase] = useState('waiting'); // waiting | countdown | recording | done
+  const [phase, setPhase] = useState('waiting'); // waiting | narrating | countdown | recording | done
   const [countdown, setCountdown] = useState(3);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef(null);
@@ -34,38 +39,61 @@ export default function CalibrationScreen({
   const startRecording = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    setPhase('countdown');
-    let c = 3;
-    setCountdown(c);
-    oracle?.startCalibrationRecording?.();
 
-    const cdInterval = setInterval(() => {
-      c--;
+    // Speak calibration instruction via Oracle before recording
+    const narration = getNarration(step.narrationKey, personality);
+    setPhase('narrating');
+
+    const beginCountdown = () => {
+      setPhase('countdown');
+      let c = 3;
       setCountdown(c);
-      if (c <= 0) {
-        clearInterval(cdInterval);
-        setPhase('recording');
-        const startTime = Date.now();
-        const progInterval = setInterval(() => {
-          const elapsed = Date.now() - startTime;
-          setProgress(Math.min(100, (elapsed / RECORD_DURATION) * 100));
-          if (elapsed >= RECORD_DURATION) {
-            clearInterval(progInterval);
-            const samples = oracle?.stopCalibrationRecording?.() || [];
-            // Add samples in bulk
-            samples.forEach((mfcc) => onAddSample(mfcc));
-            setPhase('done');
-            setTimeout(() => {
-              startedRef.current = false;
-              setPhase('waiting');
-              setProgress(0);
-              onNextPhase();
-            }, 800);
-          }
-        }, 50);
+      oracle?.startCalibrationRecording?.();
+
+      const cdInterval = setInterval(() => {
+        c--;
+        setCountdown(c);
+        if (c <= 0) {
+          clearInterval(cdInterval);
+          setPhase('recording');
+          const startTime = Date.now();
+          const progInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            setProgress(Math.min(100, (elapsed / RECORD_DURATION) * 100));
+            if (elapsed >= RECORD_DURATION) {
+              clearInterval(progInterval);
+              const samples = oracle?.stopCalibrationRecording?.() || [];
+              // Narrate sample quality feedback
+              try {
+                const feedback = getNarration('sample_good', personality);
+                oracle?.speak?.(feedback);
+              } catch {}
+              // Add samples in bulk
+              samples.forEach((mfcc) => onAddSample(mfcc));
+              setPhase('done');
+              setTimeout(() => {
+                startedRef.current = false;
+                setPhase('waiting');
+                setProgress(0);
+                onNextPhase();
+              }, 1200);
+            }
+          }, 50);
+        }
+      }, COUNTDOWN_MS);
+    };
+
+    // Speak narration, then start countdown
+    oracle?.speak?.(narration, () => {
+      setTimeout(beginCountdown, 400);
+    });
+    // Fallback: if speech never fires callback, start countdown after estimated duration
+    setTimeout(() => {
+      if (phase === 'narrating' || !startedRef.current) {
+        beginCountdown();
       }
-    }, COUNTDOWN_MS);
-  }, [oracle, onAddSample, onNextPhase]);
+    }, 6000);
+  }, [oracle, onAddSample, onNextPhase, step.narrationKey, personality, phase]);
 
   // Auto-start after brief delay when step changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,6 +120,64 @@ export default function CalibrationScreen({
         padding: 32,
       }}
     >
+      {/* Back button (only on first step before recording starts) */}
+      {onBack && calibrationStep === 0 && phase === 'waiting' && (
+        <button
+          data-testid="calibration-back"
+          onClick={onBack}
+          style={{
+            position: 'absolute', top: 24, left: 24,
+            fontFamily: 'Rajdhani', fontSize: 9, letterSpacing: 4,
+            color: 'rgba(255,255,255,0.3)', background: 'transparent',
+            border: 'none', cursor: 'pointer', textTransform: 'uppercase',
+          }}
+        >
+          ← BACK
+        </button>
+      )}
+
+      {/* Saved profiles (only show on first step, solo/online modes) */}
+      {calibrationStep === 0 && phase === 'waiting' && savedProfiles.length > 0 && gameMode !== 'passplay' && onLoadProfile && (
+        <div style={{ marginBottom: 24, textAlign: 'center', width: '100%', maxWidth: 320 }}>
+          <div style={{
+            fontFamily: 'Rajdhani', fontSize: 8, letterSpacing: 4,
+            color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', marginBottom: 10,
+          }}>
+            SAVED VOICE PROFILES
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {savedProfiles.slice(0, 3).map((profile) => (
+              <button
+                key={profile.id}
+                data-testid={`load-profile-${profile.id}`}
+                onClick={() => onLoadProfile(profile)}
+                style={{
+                  fontFamily: 'Cinzel', fontSize: 10, letterSpacing: 2,
+                  color: '#D1F7FF', background: 'transparent',
+                  border: '1px solid rgba(209,247,255,0.15)',
+                  padding: '10px 16px', cursor: 'pointer', textTransform: 'uppercase',
+                  transition: 'border-color 0.2s',
+                  maxWidth: 100, textAlign: 'center',
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(209,247,255,0.5)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(209,247,255,0.15)'}
+              >
+                <div style={{ fontSize: 9 }}>{profile.title}</div>
+                <div style={{ fontFamily: 'Rajdhani', fontSize: 7, color: 'rgba(255,255,255,0.25)', marginTop: 3 }}>
+                  {profile.personality?.toUpperCase() || 'MENTOR'}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div style={{
+            fontFamily: 'Rajdhani', fontSize: 7, letterSpacing: 3,
+            color: 'rgba(255,255,255,0.15)', marginTop: 8, textTransform: 'uppercase',
+          }}>
+            OR CALIBRATE NEW BELOW
+          </div>
+        </div>
+      )}
+
       {/* Progress dots */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 48 }}>
         {Array.from({ length: maxStep }).map((_, i) => (
@@ -129,6 +215,16 @@ export default function CalibrationScreen({
       </div>
 
       {/* Countdown or Progress bar */}
+      {phase === 'narrating' && (
+        <div style={{
+          fontFamily: 'Rajdhani, sans-serif', fontSize: 11, letterSpacing: 4,
+          color: 'rgba(209,247,255,0.5)', textTransform: 'uppercase',
+          animation: 'breathe 1.5s ease infinite',
+        }}>
+          ORACLE SPEAKING...
+        </div>
+      )}
+
       {phase === 'countdown' && (
         <div style={{
           fontFamily: 'Cinzel, serif', fontSize: 48,

@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 
 export default function BootScreen({ onTouch }) {
+  const firedRef = useRef(false);
+  const handleInteraction = useCallback((e) => {
+    if (firedRef.current) return;
+    firedRef.current = true;
+    e.preventDefault();
+    onTouch();
+  }, [onTouch]);
+
   return (
     <div
       data-testid="boot-screen"
-      onClick={onTouch}
-      onTouchStart={onTouch}
+      onClick={handleInteraction}
+      onTouchStart={handleInteraction}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
         background: '#000000',

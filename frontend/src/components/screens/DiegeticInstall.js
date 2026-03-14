@@ -20,7 +20,6 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
   const [detectedPersonality, setDetectedPersonality] = useState(null);
   const [detectedGender, setDetectedGender] = useState('female');
   const [oracleText, setOracleText] = useState('');
-  const [hasSpoken, setHasSpoken] = useState(false);
   const listenWindowRef = useRef(null);
   const rmsHistoryRef = useRef([]);
   const completedRef = useRef(false);

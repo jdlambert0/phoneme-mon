@@ -108,6 +108,29 @@ export const gameMachine = createMachine({
 
     CALIBRATION: {
       on: {
+        BACK: {
+          target: 'DIEGETIC_INSTALL',
+          actions: assign({
+            calibrationStep: () => 0,
+            calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
+            players: () => [],
+          }),
+        },
+
+        // Load a saved calibration profile, skip calibration entirely
+        LOAD_PROFILE: {
+          target: 'BATTLE_LOOP',
+          actions: assign(({ event }) => ({
+            players: [{ name: 'Player', title: event.profile.title, calibration: event.profile.calibration }],
+            calibrationStep: 3,
+            playerHealth: [10, 10],
+            round: 0,
+            finalScore: [0, 0],
+            playerHistory: [],
+            pendingMoves: [null, null],
+          })),
+        },
+
         ADD_CALIBRATION_SAMPLE: {
           actions: assign(({ context, event }) => {
             const step = context.calibrationStep;
@@ -157,6 +180,30 @@ export const gameMachine = createMachine({
           // Solo mode without tutorial: go straight to battle
           {
             guard: ({ context }) => context.calibrationStep === 2 && context.gameMode === 'solo' && !context.tutorialMode,
+            target: 'BATTLE_LOOP',
+            actions: assign(({ context }) => {
+              const cs = context.calibrationSamples.p1;
+              const calibration = {
+                burst: averageMFCC(cs.burst),
+                flow: averageMFCC(cs.flow),
+                tone: averageMFCC(cs.tone),
+              };
+              const dominant = getDominantPhoneme({ burst: cs.burst, flow: cs.flow, tone: cs.tone });
+              const title = assignPlayerTitle(dominant);
+              return {
+                players: [{ name: 'Player', title, calibration }],
+                calibrationStep: 3,
+                playerHealth: [10, 10],
+                round: 0,
+                finalScore: [0, 0],
+                playerHistory: [],
+                pendingMoves: [null, null],
+              };
+            }),
+          },
+          // Online mode: only P1 calibrates (3 steps), then go to battle
+          {
+            guard: ({ context }) => context.calibrationStep === 2 && context.gameMode === 'online',
             target: 'BATTLE_LOOP',
             actions: assign(({ context }) => {
               const cs = context.calibrationSamples.p1;
@@ -314,14 +361,35 @@ export const gameMachine = createMachine({
               currentTurn: 1,
             })),
           },
-          // All other modes (solo, passplay P2 timeout, online) → resolve round
+          // PassPlay P2 timeout → default to 'burst'
           {
+            guard: ({ context }) => context.gameMode === 'passplay' && context.currentTurn === 1,
             target: 'RESULT_DISPLAY',
             actions: assign(({ context }) => {
-              const playerMove = context.pendingMoves[0] || 'burst';
-              const enemyMove  = context.gameMode === 'online'
-                ? (context.pendingMoves[1] || getEnemyMove(context.playerHistory, 0.5))
-                : getEnemyMove(context.playerHistory, 0.9);
+              const move1 = context.pendingMoves[0] || 'burst';
+              const move2 = 'burst'; // Default for timeout
+              const rpsResult = resolveRPS(move1, move2);
+              let health = [...context.playerHealth];
+              let score  = [...context.finalScore];
+              if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
+              else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
+              return {
+                pendingMoves: [move1, move2],
+                articulationScores: [context.articulationScores[0], 0.9],
+                glassDaggerActive: [context.glassDaggerActive[0], true],
+                playerHealth: health, finalScore: score,
+                roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
+              };
+            }),
+          },
+          // Solo timeout → AI generates enemy move
+          {
+            guard: ({ context }) => context.gameMode === 'solo',
+            target: 'RESULT_DISPLAY',
+            actions: assign(({ context }) => {
+              const playerMove = 'burst'; // Default for timeout
+              const difficulty = computeDifficulty(context.round, 0.9);
+              const enemyMove = getEnemyMove(context.playerHistory, difficulty);
               const rpsResult = resolveRPS(playerMove, enemyMove);
               let health = [...context.playerHealth];
               let score  = [...context.finalScore];
@@ -329,6 +397,28 @@ export const gameMachine = createMachine({
               else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
               return {
                 pendingMoves: [playerMove, enemyMove],
+                articulationScores: [0.9, 0],
+                glassDaggerActive: [true, false],
+                playerHistory: [...context.playerHistory, playerMove].slice(-20),
+                playerHealth: health, finalScore: score,
+                roundWinner: rpsResult, round: context.round + 1,
+                difficulty,
+              };
+            }),
+          },
+          // Online timeout → use whatever moves we have, fill missing with default
+          {
+            target: 'RESULT_DISPLAY',
+            actions: assign(({ context }) => {
+              const localMove  = context.pendingMoves[0] || 'burst';
+              const remoteMove = context.pendingMoves[1] || 'burst';
+              const rpsResult = resolveRPS(localMove, remoteMove);
+              let health = [...context.playerHealth];
+              let score  = [...context.finalScore];
+              if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
+              else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
+              return {
+                pendingMoves: [localMove, remoteMove],
                 playerHealth: health, finalScore: score,
                 roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
               };
@@ -380,7 +470,11 @@ export const gameMachine = createMachine({
           },
           {
             target: 'BATTLE_LOOP',
-            actions: assign({ pendingMoves: () => [null, null] }),
+            actions: assign({
+              pendingMoves: () => [null, null],
+              glassDaggerActive: () => [false, false],
+              articulationScores: () => [0, 0],
+            }),
           },
         ],
       },
