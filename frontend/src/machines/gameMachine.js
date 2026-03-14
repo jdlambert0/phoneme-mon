@@ -286,8 +286,8 @@ export const gameMachine = createMachine({
               const playerMove = event.move;
               const artScore = event.articulationScore ?? 0;
               const glassActive = detectGlassDagger(artScore);
-              const difficulty = computeDifficulty(context.round, artScore);
-              const enemyMove = getEnemyMove([...context.playerHistory, playerMove], difficulty);
+              const difficulty = computeDifficulty(context.round, artScore, context.oraclePersonality);
+              const enemyMove = getEnemyMove([...context.playerHistory, playerMove], difficulty, context.oraclePersonality);
               const rpsResult = resolveRPS(playerMove, enemyMove);
 
               let health = [...context.playerHealth];
@@ -311,11 +311,15 @@ export const gameMachine = createMachine({
           // PassPlay P1 moves → wait for P2
           {
             guard: ({ context }) => context.gameMode === 'passplay' && context.currentTurn === 0,
-            actions: assign(({ context, event }) => ({
-              pendingMoves: [event.move, context.pendingMoves[1]],
-              articulationScores: [event.articulationScore ?? 0, context.articulationScores[1]],
-              currentTurn: 1,
-            })),
+            actions: assign(({ context, event }) => {
+              const artScore = event.articulationScore ?? 0;
+              return {
+                pendingMoves: [event.move, context.pendingMoves[1]],
+                articulationScores: [artScore, context.articulationScores[1]],
+                glassDaggerActive: [detectGlassDagger(artScore), false],
+                currentTurn: 1,
+              };
+            }),
           },
           // PassPlay P2 moves → resolve
           {
@@ -324,6 +328,7 @@ export const gameMachine = createMachine({
             actions: assign(({ context, event }) => {
               const move1 = context.pendingMoves[0];
               const move2 = event.move;
+              const artScore2 = event.articulationScore ?? 0;
               const rpsResult = resolveRPS(move1, move2);
               let health = [...context.playerHealth];
               let score = [...context.finalScore];
@@ -331,7 +336,8 @@ export const gameMachine = createMachine({
               else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
               return {
                 pendingMoves: [move1, move2],
-                articulationScores: [context.articulationScores[0], event.articulationScore ?? 0],
+                articulationScores: [context.articulationScores[0], artScore2],
+                glassDaggerActive: [context.glassDaggerActive[0], detectGlassDagger(artScore2)],
                 playerHealth: health,
                 finalScore: score,
                 roundWinner: rpsResult,
@@ -343,10 +349,14 @@ export const gameMachine = createMachine({
           // Online: store local move (resolved when REMOTE_MOVE arrives)
           {
             guard: ({ context }) => context.gameMode === 'online',
-            actions: assign(({ context, event }) => ({
-              pendingMoves: [event.move, context.pendingMoves[1]],
-              articulationScores: [event.articulationScore ?? 0, context.articulationScores[1]],
-            })),
+            actions: assign(({ context, event }) => {
+              const artScore = event.articulationScore ?? 0;
+              return {
+                pendingMoves: [event.move, context.pendingMoves[1]],
+                articulationScores: [artScore, context.articulationScores[1]],
+                glassDaggerActive: [detectGlassDagger(artScore), false],
+              };
+            }),
           },
         ],
 
@@ -388,8 +398,8 @@ export const gameMachine = createMachine({
             target: 'RESULT_DISPLAY',
             actions: assign(({ context }) => {
               const playerMove = 'burst'; // Default for timeout
-              const difficulty = computeDifficulty(context.round, 0.9);
-              const enemyMove = getEnemyMove(context.playerHistory, difficulty);
+              const difficulty = computeDifficulty(context.round, 0.9, context.oraclePersonality);
+              const enemyMove = getEnemyMove(context.playerHistory, difficulty, context.oraclePersonality);
               const rpsResult = resolveRPS(playerMove, enemyMove);
               let health = [...context.playerHealth];
               let score  = [...context.finalScore];
@@ -412,6 +422,9 @@ export const gameMachine = createMachine({
             actions: assign(({ context }) => {
               const localMove  = context.pendingMoves[0] || 'burst';
               const remoteMove = context.pendingMoves[1] || 'burst';
+              // If a move timed out, assign high articulation (low confidence)
+              const a0 = context.pendingMoves[0] ? context.articulationScores[0] : 0.9;
+              const a1 = context.pendingMoves[1] ? context.articulationScores[1] : 0.9;
               const rpsResult = resolveRPS(localMove, remoteMove);
               let health = [...context.playerHealth];
               let score  = [...context.finalScore];
@@ -419,6 +432,8 @@ export const gameMachine = createMachine({
               else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
               return {
                 pendingMoves: [localMove, remoteMove],
+                articulationScores: [a0, a1],
+                glassDaggerActive: [detectGlassDagger(a0), detectGlassDagger(a1)],
                 playerHealth: health, finalScore: score,
                 roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
               };
@@ -432,10 +447,13 @@ export const gameMachine = createMachine({
           actions: assign(({ context, event }) => {
             const localMove  = context.pendingMoves[0] || 'burst';
             const remoteMove = event.move;
+            const remoteArt  = event.articulationScore ?? 0;
             // Host = p1, Guest = p2
-            const [m1, m2] = context.onlineRole === 'host'
-              ? [localMove, remoteMove]
-              : [remoteMove, localMove];
+            const isHost = context.onlineRole === 'host';
+            const [m1, m2] = isHost ? [localMove, remoteMove] : [remoteMove, localMove];
+            const [a1, a2] = isHost
+              ? [context.articulationScores[0], remoteArt]
+              : [remoteArt, context.articulationScores[0]];
             const rpsResult = resolveRPS(m1, m2);
             let health = [...context.playerHealth];
             let score  = [...context.finalScore];
@@ -443,6 +461,8 @@ export const gameMachine = createMachine({
             else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
             return {
               pendingMoves: [m1, m2],
+              articulationScores: [a1, a2],
+              glassDaggerActive: [detectGlassDagger(a1), detectGlassDagger(a2)],
               playerHealth: health, finalScore: score,
               roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
             };
