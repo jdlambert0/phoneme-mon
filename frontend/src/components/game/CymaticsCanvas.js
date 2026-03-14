@@ -87,7 +87,11 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
 
   // Spawn burst on phoneme detection
   useEffect(() => {
-    if (!activePhoneme || activePhoneme === lastPhonemeRef.current) return;
+    if (!activePhoneme) {
+      lastPhonemeRef.current = null; // Reset so repeated same-phoneme spawns particles
+      return;
+    }
+    if (activePhoneme === lastPhonemeRef.current) return;
     lastPhonemeRef.current = activePhoneme;
     const canvas = canvasRef.current;
     if (!canvas) return;

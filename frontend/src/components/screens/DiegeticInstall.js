@@ -23,6 +23,8 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
   const [hasSpoken, setHasSpoken] = useState(false);
   const listenWindowRef = useRef(null);
   const rmsHistoryRef = useRef([]);
+  const completedRef = useRef(false);
+  const confirmTimeoutRef = useRef(null);
 
   // Accumulate RMS for phoneme detection
   useEffect(() => {
@@ -68,13 +70,19 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
     setPhase('confirming');
     const confirmText = `The ${personality.toUpperCase()} has been summoned. Linking your voice to the system.`;
     setOracleText(confirmText);
+
+    const fireComplete = () => {
+      if (completedRef.current) return; // Guard against double-fire
+      completedRef.current = true;
+      clearTimeout(confirmTimeoutRef.current);
+      onComplete({ personality, gender: detectedGender, gameMode: selectedMode });
+    };
+
     oracle?.speak(confirmText, () => {
-      setTimeout(() => {
-        onComplete({ personality, gender: detectedGender, gameMode: selectedMode });
-      }, 600);
+      setTimeout(fireComplete, 600);
     });
     // Fallback if speech never fires
-    setTimeout(() => onComplete({ personality, gender: detectedGender, gameMode: selectedMode }), 5000);
+    confirmTimeoutRef.current = setTimeout(fireComplete, 5000);
   }, [phase, oracle, detectedGender, selectedMode, onComplete]);
 
   // Auto-detect phoneme during oracle_select phase

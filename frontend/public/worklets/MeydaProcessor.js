@@ -147,6 +147,7 @@ class MeydaProcessor extends AudioWorkletProcessor {
       this.samplesWritten += ch.length;
 
       if (this.samplesWritten < this.BUFFER_SIZE) return true;
+      this.samplesWritten = 0; // Reset so FFT runs every 512 samples, not every 128
 
       // Get ordered buffer
       const frame = new Float32Array(this.BUFFER_SIZE);

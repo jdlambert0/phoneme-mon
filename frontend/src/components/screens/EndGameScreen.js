@@ -55,26 +55,40 @@ export default function EndGameScreen({ winner, players, finalScore, gameMode, o
 
       {/* Score display */}
       <div style={{
-        display: 'flex', gap: 48, alignItems: 'center', marginBottom: 64,
+        display: 'flex', gap: 48, alignItems: 'center', marginBottom: 64, position: 'relative',
       }}>
-        {[0, 1].map((i) => (
-          <div key={i} style={{ textAlign: 'center' }}>
-            <div style={{
-              fontFamily: 'Cinzel, serif', fontSize: 36,
-              color: i === 0 ? '#FF2A6D' : '#05D9E8',
-              lineHeight: 1,
-            }}>
-              {finalScore?.[i] ?? 0}
-            </div>
-            <div style={{
-              fontFamily: 'Rajdhani', fontSize: 8, letterSpacing: 3,
-              color: 'rgba(255,255,255,0.3)', marginTop: 6, textTransform: 'uppercase',
-            }}>
-              {i === 0 ? (p1.title || 'Player 1') : (p2.title || (gameMode === 'passplay' ? 'Player 2' : 'Enemy'))}
-            </div>
+        {/* Player 1 score */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontFamily: 'Cinzel, serif', fontSize: 36,
+            color: '#FF2A6D', lineHeight: 1,
+          }}>
+            {finalScore?.[0] ?? 0}
           </div>
-        ))}
+          <div style={{
+            fontFamily: 'Rajdhani', fontSize: 8, letterSpacing: 3,
+            color: 'rgba(255,255,255,0.3)', marginTop: 6, textTransform: 'uppercase',
+          }}>
+            {p1.title || 'Player 1'}
+          </div>
+        </div>
+        {/* VS separator */}
         <div style={{ color: 'rgba(255,255,255,0.2)', fontFamily: 'Cinzel', fontSize: 24 }}>vs</div>
+        {/* Player 2 score */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontFamily: 'Cinzel, serif', fontSize: 36,
+            color: '#05D9E8', lineHeight: 1,
+          }}>
+            {finalScore?.[1] ?? 0}
+          </div>
+          <div style={{
+            fontFamily: 'Rajdhani', fontSize: 8, letterSpacing: 3,
+            color: 'rgba(255,255,255,0.3)', marginTop: 6, textTransform: 'uppercase',
+          }}>
+            {p2.title || (gameMode === 'passplay' ? 'Player 2' : 'Enemy')}
+          </div>
+        </div>
       </div>
 
       {/* Replay */}

@@ -47,6 +47,7 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [micError, setMicError]           = useState(false);
   const [rtcStatus, setRtcStatus]         = useState('idle');
+  const rtcStatusRef = useRef('idle'); // Ref mirror for use in closures
   const awaitingRemoteRef = useRef(false);
 
   const listenTimerRef    = useRef(null);
@@ -63,7 +64,7 @@ export default function App() {
 
   // ── WebRTC ──────────────────────────────────────────────────────────────
   const webrtc = useWebRTC({
-    onConnectionChange: (s) => setRtcStatus(s),
+    onConnectionChange: (s) => { rtcStatusRef.current = s; setRtcStatus(s); },
     onRemoteMove: (move, artScore) => {
       if (awaitingRemoteRef.current) {
         awaitingRemoteRef.current = false;
@@ -112,11 +113,12 @@ export default function App() {
 
   // ── Oracle selected ─────────────────────────────────────────────────────
   const handleOracleSelected = useCallback(async ({ personality, gender, gameMode }) => {
-    send({ type: 'SET_ORACLE', personality, gender, gameMode });
+    // Init mic BEFORE transitioning to CALIBRATION so features are flowing
     if (gameMode !== 'online') {
       const ok = await audioEngine.initMic();
       if (!ok) setMicError(true);
     }
+    send({ type: 'SET_ORACLE', personality, gender, gameMode });
   }, [send, audioEngine]);
 
   // ── Online room ─────────────────────────────────────────────────────────
@@ -231,7 +233,10 @@ export default function App() {
     clearInterval(detectIntervalRef.current);
     setIsListening(false);
 
-    try { replay.recordMove(0, ctx.pendingMoves?.[0], ctx.articulationScores?.[0], ctx.roundWinner); } catch {}
+    try {
+      replay.recordMove(0, ctx.pendingMoves?.[0], ctx.articulationScores?.[0], ctx.roundWinner);
+      replay.recordMove(1, ctx.pendingMoves?.[1], ctx.articulationScores?.[1], ctx.roundWinner);
+    } catch {}
 
     try {
       if (ctx.roundWinner === 'p1')      auiRef.current?.playEvent('oracle_round_win');
@@ -324,7 +329,7 @@ export default function App() {
           onRoomReady={(info) => {
             handleRoomReady(info).then(() => {
               const checkConnected = setInterval(() => {
-                if (rtcStatus === 'connected') {
+                if (rtcStatusRef.current === 'connected') {
                   clearInterval(checkConnected);
                   handleRoomConnected(info);
                 }

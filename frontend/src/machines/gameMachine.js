@@ -293,27 +293,48 @@ export const gameMachine = createMachine({
               };
             }),
           },
+          // Online: store local move (resolved when REMOTE_MOVE arrives)
+          {
+            guard: ({ context }) => context.gameMode === 'online',
+            actions: assign(({ context, event }) => ({
+              pendingMoves: [event.move, context.pendingMoves[1]],
+              articulationScores: [event.articulationScore ?? 0, context.articulationScores[1]],
+            })),
+          },
         ],
 
-        TIMEOUT_MOVE: {
-          target: 'RESULT_DISPLAY',
-          actions: assign(({ context }) => {
-            const playerMove = context.pendingMoves[0] || 'burst';
-            const enemyMove  = context.gameMode === 'online'
-              ? (context.pendingMoves[1] || getEnemyMove(context.playerHistory, 0.5))
-              : getEnemyMove(context.playerHistory, 0.9);
-            const rpsResult = resolveRPS(playerMove, enemyMove);
-            let health = [...context.playerHealth];
-            let score  = [...context.finalScore];
-            if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
-            else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
-            return {
-              pendingMoves: [playerMove, enemyMove],
-              playerHealth: health, finalScore: score,
-              roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
-            };
-          }),
-        },
+        TIMEOUT_MOVE: [
+          // PassPlay P1 timeout → assign default move for P1, advance to P2's turn
+          {
+            guard: ({ context }) => context.gameMode === 'passplay' && context.currentTurn === 0,
+            actions: assign(({ context }) => ({
+              pendingMoves: ['burst', context.pendingMoves[1]],
+              articulationScores: [0.9, context.articulationScores[1]],
+              glassDaggerActive: [true, false],
+              currentTurn: 1,
+            })),
+          },
+          // All other modes (solo, passplay P2 timeout, online) → resolve round
+          {
+            target: 'RESULT_DISPLAY',
+            actions: assign(({ context }) => {
+              const playerMove = context.pendingMoves[0] || 'burst';
+              const enemyMove  = context.gameMode === 'online'
+                ? (context.pendingMoves[1] || getEnemyMove(context.playerHistory, 0.5))
+                : getEnemyMove(context.playerHistory, 0.9);
+              const rpsResult = resolveRPS(playerMove, enemyMove);
+              let health = [...context.playerHealth];
+              let score  = [...context.finalScore];
+              if (rpsResult === 'p1') { health[1] = Math.max(0, health[1] - 1); score[0]++; }
+              else if (rpsResult === 'p2') { health[0] = Math.max(0, health[0] - 1); score[1]++; }
+              return {
+                pendingMoves: [playerMove, enemyMove],
+                playerHealth: health, finalScore: score,
+                roundWinner: rpsResult, round: context.round + 1, currentTurn: 0,
+              };
+            }),
+          },
+        ],
 
         // Online: local player committed, remote move arrives via DataChannel
         REMOTE_MOVE: {

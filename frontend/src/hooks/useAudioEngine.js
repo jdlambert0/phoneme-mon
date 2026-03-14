@@ -99,7 +99,7 @@ export function useAudioEngine() {
     const loudest = recent.reduce((best, f) => ((f.rms || 0) > (best.rms || 0) ? f : best), recent[0]);
     if (!loudest?.mfcc) return null;
 
-    const result = classifyPhoneme(loudest, calibrationRef.current);
+    const result = classifyPhoneme(loudest.mfcc, calibrationRef.current);
 
     return {
       ...result,
