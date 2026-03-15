@@ -2,7 +2,7 @@ import React from 'react';
 
 const PHONEME_COLORS = { burst: '#FF2A6D', flow: '#05D9E8', tone: '#D1F7FF' };
 
-export default function EndGameScreen({ winner, players, finalScore, gameMode, onReplay, onShare, personality }) {
+export default function EndGameScreen({ winner, players, finalScore, gameMode, onReplay, onShare, onLeaderboard, personality }) {
   const isP1Win = winner === 'p1';
   const isTie = winner === 'tie';
   const p1 = players?.[0] || { title: 'You' };
@@ -124,6 +124,23 @@ export default function EndGameScreen({ winner, players, finalScore, gameMode, o
             onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(5,217,232,0.25)'}
           >
             SHARE REPLAY
+          </button>
+        )}
+        {onLeaderboard && (
+          <button
+            data-testid="leaderboard-button"
+            onClick={onLeaderboard}
+            style={{
+              fontFamily: 'Rajdhani, sans-serif', fontSize: 11, letterSpacing: 6,
+              color: '#FFD700', background: 'transparent',
+              border: '1px solid rgba(255,215,0,0.2)', padding: '14px 40px',
+              textTransform: 'uppercase', cursor: 'pointer',
+              transition: 'border-color 0.2s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = '#FFD700'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,215,0,0.2)'}
+          >
+            LEADERBOARD
           </button>
         )}
       </div>

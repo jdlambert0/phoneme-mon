@@ -28,6 +28,8 @@ import CalibrationScreen   from './components/screens/CalibrationScreen';
 import TutorialScreen      from './components/screens/TutorialScreen';
 import EndGameScreen       from './components/screens/EndGameScreen';
 import OnlineMatchmaking   from './components/screens/OnlineMatchmaking';
+import LeaderboardScreen   from './components/screens/LeaderboardScreen';
+import PhonemeTuneScreen   from './components/screens/PhonemetuneScreen';
 import { CymaticsCanvas }  from './components/game/CymaticsCanvas';
 import { BattleHUD }       from './components/game/BattleHUD';
 import { OracleDisplay }   from './components/ui/OracleDisplay';
@@ -47,6 +49,8 @@ export default function App() {
   const [isListening, setIsListening]     = useState(false);
   const [micError, setMicError]           = useState(false);
   const [rtcStatus, setRtcStatus]         = useState('idle');
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showTuner, setShowTuner]             = useState(false);
   const rtcStatusRef = useRef('idle'); // Ref mirror for use in closures
   const awaitingRemoteRef = useRef(false);
 
@@ -413,6 +417,36 @@ export default function App() {
           <RPSOverlay />
           <ListenCountdown isListening={isListening} durationMs={LISTEN_WINDOW_MS} />
 
+          {/* Tuner button — bottom left */}
+          <button
+            data-testid="tune-button"
+            onClick={() => setShowTuner(true)}
+            style={{
+              position: 'fixed', bottom: 20, left: 20, zIndex: 50,
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'border-color 0.2s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
+          >
+            <span style={{ fontFamily: 'Rajdhani', fontSize: 12, color: '#D1F7FF' }}>⚙</span>
+          </button>
+
+          {showTuner && (
+            <PhonemeTuneScreen
+              calibration={ctx.players?.[0]?.calibration}
+              featuresRef={audioEngine.featuresRef}
+              onClose={() => setShowTuner(false)}
+              onRecalibrate={() => {
+                setShowTuner(false);
+                handleReplay();
+              }}
+            />
+          )}
+
           {ctx.gameMode === 'passplay' && ctx.currentTurn === 1 && stateName === 'BATTLE_LOOP' && (
             <div
               data-testid="pass-device-overlay"
@@ -455,9 +489,11 @@ export default function App() {
             onShare={() => {
               try { replay.shareReplay(ctx.players?.[0]?.title || 'Voice'); } catch {}
             }}
+            onLeaderboard={() => setShowLeaderboard(true)}
             personality={ctx.oraclePersonality}
           />
           <OracleDisplay text={oracleText} personality={ctx.oraclePersonality} isActive={!!oracleText} />
+          {showLeaderboard && <LeaderboardScreen onClose={() => setShowLeaderboard(false)} />}
         </>
       )}
 
