@@ -30,8 +30,9 @@ export default function CalibrationScreen({
   const [phase, setPhase] = useState('waiting'); // waiting | narrating | countdown | recording | done
   const [countdown, setCountdown] = useState(3);
   const [progress, setProgress] = useState(0);
-  const timerRef = useRef(null);
   const startedRef = useRef(false);
+  const countdownStartedRef = useRef(false);
+  const activeIntervalsRef = useRef([]); // Track intervals for cleanup on unmount
 
   const maxStep = gameMode === 'passplay' ? 6 : 3;
   const step = STEPS[Math.min(calibrationStep, STEPS.length - 1)];
@@ -39,12 +40,17 @@ export default function CalibrationScreen({
   const startRecording = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
+    countdownStartedRef.current = false;
 
     // Speak calibration instruction via Oracle before recording
     const narration = getNarration(step.narrationKey, personality);
     setPhase('narrating');
 
     const beginCountdown = () => {
+      // Guard: only start countdown once (both callback and fallback may fire)
+      if (countdownStartedRef.current) return;
+      countdownStartedRef.current = true;
+
       setPhase('countdown');
       let c = 3;
       setCountdown(c);
@@ -55,6 +61,7 @@ export default function CalibrationScreen({
         setCountdown(c);
         if (c <= 0) {
           clearInterval(cdInterval);
+          activeIntervalsRef.current = activeIntervalsRef.current.filter(id => id !== cdInterval);
           setPhase('recording');
           const startTime = Date.now();
           const progInterval = setInterval(() => {
@@ -62,6 +69,7 @@ export default function CalibrationScreen({
             setProgress(Math.min(100, (elapsed / RECORD_DURATION) * 100));
             if (elapsed >= RECORD_DURATION) {
               clearInterval(progInterval);
+              activeIntervalsRef.current = activeIntervalsRef.current.filter(id => id !== progInterval);
               const samples = oracle?.stopCalibrationRecording?.() || [];
               // Narrate sample quality feedback
               try {
@@ -73,14 +81,17 @@ export default function CalibrationScreen({
               setPhase('done');
               setTimeout(() => {
                 startedRef.current = false;
+                countdownStartedRef.current = false;
                 setPhase('waiting');
                 setProgress(0);
                 onNextPhase();
               }, 1200);
             }
           }, 50);
+          activeIntervalsRef.current.push(progInterval);
         }
       }, COUNTDOWN_MS);
+      activeIntervalsRef.current.push(cdInterval);
     };
 
     // Speak narration, then start countdown
@@ -89,11 +100,11 @@ export default function CalibrationScreen({
     });
     // Fallback: if speech never fires callback, start countdown after estimated duration
     setTimeout(() => {
-      if (phase === 'narrating' || !startedRef.current) {
+      if (!countdownStartedRef.current) {
         beginCountdown();
       }
     }, 6000);
-  }, [oracle, onAddSample, onNextPhase, step.narrationKey, personality, phase]);
+  }, [oracle, onAddSample, onNextPhase, step.narrationKey, personality]);
 
   // Auto-start after brief delay when step changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,6 +115,14 @@ export default function CalibrationScreen({
     const t = setTimeout(startRecording, 1200);
     return () => clearTimeout(t);
   }, [calibrationStep]);
+
+  // Cleanup active intervals on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      activeIntervalsRef.current.forEach(id => clearInterval(id));
+      activeIntervalsRef.current = [];
+    };
+  }, []);
 
   const isPassDevicePrompt = gameMode === 'passplay' && calibrationStep === 3 && phase === 'waiting';
 
