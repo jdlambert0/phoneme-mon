@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { GOLDEN_RATIO, icosahedronVertices2D } from '../../utils/dspMath';
+import { getArena, DEFAULT_ARENA } from '../../utils/arenas';
 
 const TOTAL_PARTICLES = 5200;
 
@@ -23,15 +24,17 @@ function createSprite(color = '#ffffff') {
   return s;
 }
 
-function createParticle(cx, cy, type, features) {
+function createParticle(cx, cy, type, features, arena) {
   const rms = features?.rms || 0.05;
   const speed = 1 + rms * 15;
   const angle = Math.random() * Math.PI * 2;
-  let hue;
-  if (type === 'burst') hue = 340 + Math.random() * 20;
-  else if (type === 'flow') hue = 185 + Math.random() * 20;
-  else if (type === 'tone') hue = 210 + Math.random() * 30;
-  else hue = 200 + Math.random() * 160;
+
+  const hueRange = type !== 'ambient'
+    ? (arena?.phonemeHues?.[type] || [200, 360])
+    : (arena?.ambientHue || [200, 360]);
+  const hue = hueRange[0] + Math.random() * (hueRange[1] - hueRange[0]);
+
+  const gravMod = arena?.particleGravityMod ?? 1.0;
 
   return {
     x: cx + (Math.random() - 0.5) * 40,
@@ -43,7 +46,7 @@ function createParticle(cx, cy, type, features) {
     hue,
     size: type === 'ambient' ? 1.5 + Math.random() * 2 : 2 + Math.random() * 4,
     type,
-    gravity: type === 'burst' ? 0.04 : type === 'flow' ? -0.01 : 0,
+    gravity: (type === 'burst' ? 0.04 : type === 'flow' ? -0.01 : 0) * gravMod,
     drag: type === 'tone' ? 0.985 : 0.97,
   };
 }
@@ -53,13 +56,14 @@ function createParticle(cx, cy, type, features) {
  * Reads from featuresRef directly (no React re-renders for audio frames).
  * Animation loop runs once and reads refs on each frame.
  */
-export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
+export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState, arenaId }) => {
   const canvasRef = useRef(null);
   const particlesRef = useRef([]);
   const rotationRef = useRef(0);
   const spritesRef = useRef({});
   const rafRef = useRef(null);
   const lastPhonemeRef = useRef(null);
+  const arenaRef = useRef(getArena(arenaId || DEFAULT_ARENA));
 
   const activePhonemeRef = useRef(activePhoneme);
   const gameStateRef = useRef(gameState);
@@ -67,19 +71,33 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
   useEffect(() => { activePhonemeRef.current = activePhoneme; }, [activePhoneme]);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
-  // Initialize sprites once
+  // Update arena when prop changes
   useEffect(() => {
+    const arena = getArena(arenaId || DEFAULT_ARENA);
+    arenaRef.current = arena;
+    // Rebuild sprites with arena colors
     spritesRef.current = {
-      burst: createSprite('rgb(255,42,109)'),
-      flow: createSprite('rgb(5,217,232)'),
-      tone: createSprite('rgb(209,247,255)'),
-      ambient: createSprite('rgb(120,140,200)'),
+      burst:   createSprite(arena.spriteColors.burst),
+      flow:    createSprite(arena.spriteColors.flow),
+      tone:    createSprite(arena.spriteColors.tone),
+      ambient: createSprite(arena.spriteColors.ambient),
+    };
+  }, [arenaId]);
+
+  // Initialize sprites and ambient particles once
+  useEffect(() => {
+    const arena = arenaRef.current;
+    spritesRef.current = {
+      burst:   createSprite(arena.spriteColors.burst),
+      flow:    createSprite(arena.spriteColors.flow),
+      tone:    createSprite(arena.spriteColors.tone),
+      ambient: createSprite(arena.spriteColors.ambient),
     };
     const canvas = canvasRef.current;
     if (!canvas) return;
     const { width: w, height: h } = canvas;
     for (let i = 0; i < 800; i++) {
-      const p = createParticle(Math.random() * w, Math.random() * h, 'ambient', null);
+      const p = createParticle(Math.random() * w, Math.random() * h, 'ambient', null, arena);
       p.life = Math.random();
       particlesRef.current.push(p);
     }
@@ -98,8 +116,9 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
     const cx = canvas.width / 2, cy = canvas.height / 2;
     const count = activePhoneme === 'burst' ? 300 : activePhoneme === 'flow' ? 200 : 150;
     const features = featuresRef?.current;
+    const arena = arenaRef.current;
     for (let i = 0; i < count; i++) {
-      particlesRef.current.push(createParticle(cx, cy, activePhoneme, features));
+      particlesRef.current.push(createParticle(cx, cy, activePhoneme, features, arena));
     }
   }, [activePhoneme, featuresRef]);
 
@@ -120,21 +139,27 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
         const curFeatures = featuresRef?.current;
         const curPhoneme = activePhonemeRef.current;
         const curGameState = gameStateRef.current;
+        const arena = arenaRef.current;
 
         const ctx = canvas.getContext('2d');
         if (!ctx) { rafRef.current = requestAnimationFrame(draw); return; }
         const w = canvas.width, h = canvas.height;
 
-        ctx.fillStyle = 'rgba(3,3,5,0.18)';
+        // Use arena background + fade alpha
+        const bg = arena.background || '#030305';
+        const bgR = parseInt(bg.slice(1, 3), 16);
+        const bgG = parseInt(bg.slice(3, 5), 16);
+        const bgB = parseInt(bg.slice(5, 7), 16);
+        ctx.fillStyle = `rgba(${bgR},${bgG},${bgB},${arena.fadeAlpha || 0.18})`;
         ctx.fillRect(0, 0, w, h);
 
         const cx = w / 2, cy = h / 2;
         const rms = curFeatures?.rms || 0;
         const centroid = curFeatures?.spectralCentroid || 1000;
 
-        if (Math.random() < 0.3) {
+        if (Math.random() < (arena.ambientSpawnRate || 0.3)) {
           particlesRef.current.push(createParticle(
-            Math.random() * w, Math.random() * h, 'ambient', curFeatures
+            Math.random() * w, Math.random() * h, 'ambient', curFeatures, arena
           ));
         }
 
@@ -169,7 +194,7 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
             cx, cy, 80 + rms * 120,
             rotationRef.current, rotationRef.current * 0.6
           );
-          ctx.strokeStyle = 'rgba(209,247,255,0.4)';
+          ctx.strokeStyle = arena.wireframeColor || 'rgba(209,247,255,0.4)';
           ctx.lineWidth = 0.8;
           ctx.beginPath();
           verts.forEach(({ x, y }, i) => {
@@ -181,15 +206,16 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
           verts.forEach(({ x, y }) => {
             ctx.beginPath();
             ctx.arc(x, y, 2, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(209,247,255,0.8)';
+            ctx.fillStyle = arena.wireframeVertexColor || 'rgba(209,247,255,0.8)';
             ctx.fill();
           });
         }
 
-        // Voice circle glow
+        // Voice circle glow — uses arena glow colors
         if (rms > 0.01) {
           const pulseR = 30 + rms * 200;
-          const hexColor = curPhoneme === 'burst' ? '#FF2A6D' : curPhoneme === 'flow' ? '#05D9E8' : '#D1F7FF';
+          const glowColors = arena.glowColors || {};
+          const hexColor = glowColors[curPhoneme] || '#D1F7FF';
           const rgb = hexToRgb(hexColor);
           ctx.beginPath();
           ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
@@ -202,7 +228,7 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
         if (curFeatures?.spectralCentroid > 500) {
           const freq = Math.min(centroid / 8000, 1);
           const lineY = cy + (0.5 - freq) * h * 0.5;
-          ctx.strokeStyle = 'rgba(5,217,232,0.08)';
+          ctx.strokeStyle = arena.centroidLineColor || 'rgba(5,217,232,0.08)';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(0, lineY);
@@ -227,7 +253,7 @@ export const CymaticsCanvas = ({ featuresRef, activePhoneme, gameState }) => {
     <canvas
       ref={canvasRef}
       data-testid="cymatics-canvas"
-      style={{ position: 'fixed', inset: 0, zIndex: 0, background: '#030305' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 0, background: arenaRef.current?.background || '#030305' }}
     />
   );
 };

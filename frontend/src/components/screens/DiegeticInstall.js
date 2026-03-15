@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getNarration } from '../../utils/narrationStrings';
 import { VoiceInputViz } from '../ui/VoiceInputViz';
 import { OracleDisplay } from '../ui/OracleDisplay';
+import { ARENA_LIST, DEFAULT_ARENA } from '../../utils/arenas';
 
 const GAME_MODES = [
   { id: 'tutorial', label: 'TUTORIAL',    desc: 'Learn the three voice attacks' },
@@ -15,8 +16,9 @@ const GAME_MODES = [
  * Oracle personality is chosen by first phoneme detected (Burst=Rival, Flow=Mentor, Tone=Ancient)
  */
 export default function DiegeticInstall({ oracle, onComplete, latestFeatures, featuresRef }) {
-  const [phase, setPhase] = useState('mode_select'); // mode_select | rules | oracle_select | confirming
+  const [phase, setPhase] = useState('mode_select'); // mode_select | arena_select | rules | oracle_select | confirming
   const [selectedMode, setSelectedMode] = useState('solo');
+  const [selectedArena, setSelectedArena] = useState(DEFAULT_ARENA);
   const [detectedPersonality, setDetectedPersonality] = useState(null);
   const [detectedGender, setDetectedGender] = useState('female');
   const [oracleText, setOracleText] = useState('');
@@ -44,8 +46,13 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
     return null;
   }, [latestFeatures]);
 
-  const startRules = useCallback((mode) => {
+  const selectMode = useCallback((mode) => {
     setSelectedMode(mode);
+    setPhase('arena_select');
+  }, []);
+
+  const startRules = useCallback((arenaId) => {
+    setSelectedArena(arenaId || DEFAULT_ARENA);
     setPhase('rules');
     const narr = getNarration('rpsRules', 'mentor');
     setOracleText(narr);
@@ -74,7 +81,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
       if (completedRef.current) return; // Guard against double-fire
       completedRef.current = true;
       clearTimeout(confirmTimeoutRef.current);
-      onComplete({ personality, gender: detectedGender, gameMode: selectedMode });
+      onComplete({ personality, gender: detectedGender, gameMode: selectedMode, arena: selectedArena });
     };
 
     oracle?.speak(confirmText, () => {
@@ -82,7 +89,8 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
     });
     // Fallback if speech never fires
     confirmTimeoutRef.current = setTimeout(fireComplete, 5000);
-  }, [phase, oracle, detectedGender, selectedMode, onComplete]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, oracle, detectedGender, selectedMode, selectedArena, onComplete]);
 
   // Auto-detect phoneme during oracle_select phase
   useEffect(() => {
@@ -122,7 +130,7 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
             <button
               key={id}
               data-testid={`mode-${id}`}
-              onClick={() => startRules(id)}
+              onClick={() => selectMode(id)}
               style={{
                 fontFamily: 'Cinzel, serif', fontSize: 14,
                 letterSpacing: 4, color: 'rgba(255,255,255,0.8)',
@@ -155,6 +163,42 @@ export default function DiegeticInstall({ oracle, onComplete, latestFeatures, fe
             >
               {detectedGender === 'female' ? 'FEMALE' : 'MALE'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'arena_select' && (
+        <div style={{ marginTop: 140, display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 360, alignItems: 'center' }}>
+          <div style={{ fontFamily: 'Rajdhani', fontSize: 10, letterSpacing: 5, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: 12 }}>
+            Choose Arena
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
+            {ARENA_LIST.map((arena) => {
+              const isSelected = selectedArena === arena.id;
+              const accentColor = arena.glowColors?.burst || '#D1F7FF';
+              return (
+                <button
+                  key={arena.id}
+                  data-testid={`arena-${arena.id}`}
+                  onClick={() => startRules(arena.id)}
+                  style={{
+                    fontFamily: 'Cinzel, serif', fontSize: 11,
+                    letterSpacing: 3, color: isSelected ? accentColor : 'rgba(255,255,255,0.7)',
+                    background: arena.background || '#030305',
+                    border: `1px solid ${isSelected ? accentColor + '60' : 'rgba(255,255,255,0.1)'}`,
+                    padding: '18px 16px', textTransform: 'uppercase',
+                    cursor: 'pointer', textAlign: 'center',
+                    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+                    borderRadius: 4,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = accentColor + '80'; e.currentTarget.style.boxShadow = `0 0 16px ${accentColor}20`; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = isSelected ? accentColor + '60' : 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <div>{arena.name}</div>
+                  <div style={{ fontFamily: 'Manrope', fontSize: 8, color: 'rgba(255,255,255,0.3)', marginTop: 6, letterSpacing: 1 }}>{arena.desc}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

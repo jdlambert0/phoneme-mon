@@ -10,6 +10,7 @@ export const INITIAL_CONTEXT = {
   oraclePersonality: 'mentor',
   oracleGender: 'female',
   gameMode: 'solo', // 'solo' | 'passplay' | 'online'
+  arena: 'void',    // 'void' | 'ember' | 'abyss' | 'prism'
   tutorialMode: false,
 
   // Online
@@ -71,6 +72,7 @@ export const gameMachine = createMachine({
               oraclePersonality: ({ event }) => event.personality,
               oracleGender:      ({ event }) => event.gender,
               gameMode:          () => 'online',
+              arena:             ({ event }) => event.arena || 'void',
               calibrationStep:   () => 0,
               calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
               players: () => [],
@@ -84,6 +86,7 @@ export const gameMachine = createMachine({
               oracleGender:      ({ event }) => event.gender,
               gameMode:          ({ event }) => event.gameMode === 'tutorial' ? 'solo' : (event.gameMode || 'solo'),
               tutorialMode:      ({ event }) => event.gameMode === 'tutorial',
+              arena:             ({ event }) => event.arena || 'void',
               calibrationStep:   () => 0,
               calibrationSamples: () => ({ p1: { burst: [], flow: [], tone: [] }, p2: { burst: [], flow: [], tone: [] } }),
               players: () => [],

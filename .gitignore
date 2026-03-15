@@ -98,3 +98,4 @@ android-sdk/ -e
 *.env
 *.env.*
 .env
+bun.lock

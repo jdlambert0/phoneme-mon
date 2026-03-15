@@ -116,13 +116,13 @@ export default function App() {
   }, [send]);
 
   // ── Oracle selected ─────────────────────────────────────────────────────
-  const handleOracleSelected = useCallback(async ({ personality, gender, gameMode }) => {
+  const handleOracleSelected = useCallback(async ({ personality, gender, gameMode, arena }) => {
     // Init mic BEFORE transitioning to CALIBRATION so features are flowing
     if (gameMode !== 'online') {
       const ok = await audioEngine.initMic();
       if (!ok) setMicError(true);
     }
-    send({ type: 'SET_ORACLE', personality, gender, gameMode });
+    send({ type: 'SET_ORACLE', personality, gender, gameMode, arena });
   }, [send, audioEngine]);
 
   // ── Online room ─────────────────────────────────────────────────────────
@@ -331,6 +331,7 @@ export default function App() {
           featuresRef={audioEngine.featuresRef}
           activePhoneme={activePhoneme}
           gameState={stateName}
+          arenaId={ctx.arena}
         />
       )}
 
